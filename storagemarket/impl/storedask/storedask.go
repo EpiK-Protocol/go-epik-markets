@@ -17,7 +17,7 @@ import (
 )
 
 var log = logging.Logger("storedask")
-var defaultPrice = abi.NewTokenAmount(500_000_000)
+var defaultPrice = abi.NewTokenAmount(0)
 
 const defaultDuration abi.ChainEpoch = 1000000
 const defaultMinPieceSize abi.PaddedPieceSize = 256

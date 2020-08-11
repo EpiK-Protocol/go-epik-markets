@@ -53,7 +53,7 @@ var _ providerstates.ProviderDealEnvironment = new(Provider)
 
 // DefaultPricePerByte is the charge per byte retrieved if the miner does
 // not specifically set it
-var DefaultPricePerByte = abi.NewTokenAmount(2)
+var DefaultPricePerByte = abi.NewTokenAmount(0)
 
 // DefaultPaymentInterval is the baseline interval, set to 1Mb
 // if the miner does not explicitly set it otherwise
