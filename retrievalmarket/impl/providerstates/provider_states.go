@@ -72,7 +72,10 @@ func DecideOnDeal(ctx fsm.Context, env ProviderDealEnvironment, state rm.Provide
 // SendBlocks sends blocks to the client until funds are needed
 func SendBlocks(ctx fsm.Context, environment ProviderDealEnvironment, deal rm.ProviderDealState) error {
 	totalSent := deal.TotalSent
-	totalPaidFor := big.Div(deal.FundsReceived, deal.PricePerByte).Uint64()
+	totalPaidFor := uint64(0)
+	if deal.PricePerByte.GreaterThan(big.Zero()) {
+		totalPaidFor = big.Div(deal.FundsReceived, deal.PricePerByte).Uint64()
+	}
 	var blocks []rm.Block
 
 	// read blocks until we reach current interval
