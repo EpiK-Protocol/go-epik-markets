@@ -1017,7 +1017,7 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{132}); err != nil {
+	if _, err := w.Write([]byte{134}); err != nil {
 		return err
 	}
 
@@ -1057,6 +1057,29 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.Expert (string) (string)
+	if len(t.Expert) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Expert was too long")
+	}
+
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.Expert)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.Expert)); err != nil {
+		return err
+	}
+
+	// t.Bounty (string) (string)
+	if len(t.Bounty) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Bounty was too long")
+	}
+
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.Bounty)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.Bounty)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1071,7 +1094,7 @@ func (t *DataRef) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -1134,6 +1157,26 @@ func (t *DataRef) UnmarshalCBOR(r io.Reader) error {
 		}
 		t.PieceSize = abi.UnpaddedPieceSize(extra)
 
+	}
+	// t.Expert (string) (string)
+
+	{
+		sval, err := cbg.ReadString(br)
+		if err != nil {
+			return err
+		}
+
+		t.Expert = string(sval)
+	}
+	// t.Bounty (string) (string)
+
+	{
+		sval, err := cbg.ReadString(br)
+		if err != nil {
+			return err
+		}
+
+		t.Bounty = string(sval)
 	}
 	return nil
 }

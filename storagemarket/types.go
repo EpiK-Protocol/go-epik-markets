@@ -540,6 +540,9 @@ type DataRef struct {
 
 	PieceCid  *cid.Cid              // Optional for non-manual transfer, will be recomputed from the data if not given
 	PieceSize abi.UnpaddedPieceSize // Optional for non-manual transfer, will be recomputed from the data if not given
+
+	Expert string
+	Bounty string
 }
 
 // The interface provided by the module to the outside world for storage clients.
