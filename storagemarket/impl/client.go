@@ -210,6 +210,7 @@ func (c *Client) ProposeStorageDeal(
 	price abi.TokenAmount,
 	collateral abi.TokenAmount,
 	rt abi.RegisteredSealProof,
+	redundancy int64,
 ) (*storagemarket.ProposeStorageDealResult, error) {
 	commP, pieceSize, err := clientutils.CommP(ctx, c.pio, rt, data)
 	if err != nil {
@@ -230,6 +231,7 @@ func (c *Client) ProposeStorageDeal(
 		StoragePricePerEpoch: price,
 		ProviderCollateral:   abi.NewTokenAmount(int64(pieceSize)), // TODO: real calc
 		ClientCollateral:     big.Zero(),
+		Redundancy:           redundancy,
 	}
 
 	clientDealProposal, err := c.node.SignProposal(ctx, addr, dealProposal)

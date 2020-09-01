@@ -423,6 +423,7 @@ func (h *harness) ProposeStorageDeal(t *testing.T, dataRef *storagemarket.DataRe
 		big.NewInt(1),
 		big.NewInt(0),
 		abi.RegisteredSealProof_StackedDrg2KiBV1,
+		0,
 	)
 	assert.NoError(t, err)
 	return result

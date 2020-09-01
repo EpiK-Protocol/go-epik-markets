@@ -46,3 +46,5 @@ require (
 )
 
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
+// replace github.com/filecoin-project/specs-actors => ../go-epik-actors
+replace github.com/filecoin-project/specs-actors => github.com/EpiK-Protocol/go-epik-actors testnet-compat
