@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/filecoin-project/specs-actors/actors/abi"
 	"github.com/filecoin-project/specs-actors/actors/abi/big"
+	"github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
 	"github.com/ipfs/go-cid"
@@ -74,6 +75,16 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 	}
 
 	// TODO: check StorageCollateral
+	minerInfo, err := environment.Node().GetMinerInfo(ctx.Context(), deal.Proposal.Provider, tok)
+	if err != nil {
+		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("getting miner info: %w", err))
+	}
+	pledge := minerInfo.SectorSize * (minerInfo.SectorCount + 1) / (1 << 30) * builtin.InitialPledgeMeetsPerGiB
+	pledgeAmount := big.Mul(big.NewIntUnsigned(pledge), abi.TokenPrecision)
+	if minerInfo.Balance.LessThan(pledgeAmount) {
+		return ctx.Trigger(storagemarket.ProviderEventDealRejected,
+			xerrors.Errorf("storage balance less than pledge: %s < %s", minerInfo.Balance, pledgeAmount))
+	}
 
 	minPrice := big.Div(big.Mul(environment.Ask().Price, abi.NewTokenAmount(int64(deal.Proposal.PieceSize))), abi.NewTokenAmount(1<<30))
 	if deal.Proposal.StoragePricePerEpoch.LessThan(minPrice) {

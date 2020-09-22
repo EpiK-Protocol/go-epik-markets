@@ -465,6 +465,9 @@ type StorageProviderNode interface {
 	// Called when a deal is complete and on chain, and data has been transferred and is ready to be added to a sector
 	OnDealComplete(ctx context.Context, deal MinerDeal, pieceSize abi.UnpaddedPieceSize, pieceReader io.Reader) error
 
+	// returns the provider info
+	GetMinerInfo(ctx context.Context, maddr address.Address, tok shared.TipSetToken) (*StorageProviderInfo, error)
+
 	// returns the worker address associated with a miner
 	GetMinerWorkerAddress(ctx context.Context, addr address.Address, tok shared.TipSetToken) (address.Address, error)
 
@@ -517,12 +520,14 @@ type StorageClientProofs interface {
 
 // Closely follows the MinerInfo struct in the spec
 type StorageProviderInfo struct {
-	Address    address.Address // actor address
-	Owner      address.Address
-	Worker     address.Address // signs messages
-	SectorSize uint64
-	PeerID     peer.ID
-	Addrs      []ma.Multiaddr
+	Address     address.Address // actor address
+	Owner       address.Address
+	Worker      address.Address // signs messages
+	SectorSize  uint64
+	SectorCount uint64
+	PeerID      peer.ID
+	Addrs       []ma.Multiaddr
+	Balance     abi.TokenAmount
 }
 
 type ProposeStorageDealResult struct {
