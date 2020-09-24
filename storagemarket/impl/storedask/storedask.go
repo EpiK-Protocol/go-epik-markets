@@ -19,7 +19,7 @@ import (
 var log = logging.Logger("storedask")
 var defaultPrice = abi.NewTokenAmount(0)
 
-const defaultDuration abi.ChainEpoch = 1000000
+const defaultDuration abi.ChainEpoch = 100000000
 const defaultMinPieceSize abi.PaddedPieceSize = 256
 
 // It would be nice to default this to the miner's sector size

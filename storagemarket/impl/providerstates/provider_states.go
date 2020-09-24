@@ -74,6 +74,17 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("deal start epoch is too soon or deal already expired"))
 	}
 
+	list, err := environment.Node().ListProviderDeals(ctx.Context(), deal.Proposal.Provider, tok)
+	if err != nil {
+		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("getting provider list: %w", err))
+	}
+	for _, sd := range list {
+		if sd.PieceCID.Equals(deal.Proposal.PieceCID) {
+			return ctx.Trigger(storagemarket.ProviderEventDealRejected,
+				xerrors.Errorf("duplicat storage pieceCID: %s", deal.Proposal.PieceCID))
+		}
+	}
+
 	// TODO: check StorageCollateral
 	minerInfo, err := environment.Node().GetMinerInfo(ctx.Context(), deal.Proposal.Provider, tok)
 	if err != nil {
