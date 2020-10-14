@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/filecoin-project/specs-actors/actors/abi"
 	"github.com/filecoin-project/specs-actors/actors/abi/big"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
 	"github.com/ipfs/go-cid"
@@ -90,7 +89,8 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 	if err != nil {
 		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("getting miner info: %w", err))
 	}
-	pledge := minerInfo.SectorSize * (minerInfo.SectorCount + 1) / (1 << 30) * builtin.InitialPledgeMeetsPerGiB
+	// pledge := minerInfo.SectorSize * (minerInfo.SectorCount + 1) / (1 << 30) * builtin.InitialPledgeMeetsPerGiB
+	pledge := uint64(1000)
 	pledgeAmount := big.Mul(big.NewIntUnsigned(pledge), abi.TokenPrecision)
 	if minerInfo.Balance.LessThan(pledgeAmount) {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected,
