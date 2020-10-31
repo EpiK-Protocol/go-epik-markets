@@ -78,7 +78,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("getting provider list: %w", err))
 	}
 	for _, sd := range list {
-		if sd.PieceCID.Equals(deal.Proposal.PieceCID) {
+		if sd.DealState.SectorStartEpoch > 0 && sd.PieceCID.Equals(deal.Proposal.PieceCID) {
 			return ctx.Trigger(storagemarket.ProviderEventDealRejected,
 				xerrors.Errorf("duplicat storage pieceCID: %s", deal.Proposal.PieceCID))
 		}
