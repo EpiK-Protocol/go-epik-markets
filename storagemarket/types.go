@@ -183,8 +183,6 @@ type DataRef struct {
 	Bounty string
 }
 
-}
-
 // ProviderDealState represents a Provider's current state of a deal
 type ProviderDealState struct {
 	State         StorageDealStatus

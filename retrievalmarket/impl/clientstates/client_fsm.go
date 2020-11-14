@@ -239,7 +239,7 @@ var ClientEvents = fsm.Events{
 
 			bytesPaidFor := uint64(0)
 			if deal.PricePerByte.GreaterThan(big.Zero()) {
-				bytesPaidFor := big.Div(big.Sub(deal.PaymentRequested, paymentForUnsealing), deal.PricePerByte).Uint64()
+				bytesPaidFor = big.Div(big.Sub(deal.PaymentRequested, paymentForUnsealing), deal.PricePerByte).Uint64()
 			}
 			if bytesPaidFor >= deal.CurrentInterval {
 				deal.CurrentInterval += deal.DealProposal.PaymentIntervalIncrease
