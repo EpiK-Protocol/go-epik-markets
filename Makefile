@@ -36,3 +36,41 @@ clean:
 	rm -f .filecoin-build
 	rm -f .update-modules
 	rm -f coverage.txt
+
+DOTs=$(shell find docs -name '*.dot')
+MMDs=$(shell find docs -name '*.mmd')
+SVGs=$(DOTs:%=%.svg) $(MMDs:%=%.svg)
+PNGs=$(DOTs:%=%.png) $(MMDs:%=%.png)
+
+node_modules: package.json
+	npm install
+
+diagrams: ${MMDs} ${SVGs} ${PNGs}
+
+%.mmd.svg: %.mmd
+	node_modules/.bin/mmdc -i $< -o $@
+
+%.mmd.png: %.mmd
+	node_modules/.bin/mmdc -i $< -o $@
+
+FORCE:
+
+docsgen: FORCE .update-modules .filecoin-build
+	go run ./docsgen
+
+$(MMDs): docsgen node_modules
+
+imports: FORCE
+	scripts/fiximports
+
+cbor-gen: FORCE
+	go generate ./...
+
+tidy: FORCE
+	go mod tidy
+
+lint: FORCE
+	git fetch
+	golangci-lint run -v --concurrency 2 --new-from-rev origin/master
+
+prepare-pr: cbor-gen tidy diagrams imports lint

@@ -1,22 +1,24 @@
 package shared_testutil
 
 import (
-	"math/big"
 	"math/rand"
 	"testing"
 
-	"github.com/filecoin-project/go-address"
-	cborutil "github.com/filecoin-project/go-cbor-util"
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
-	"github.com/filecoin-project/specs-actors/actors/crypto"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/test"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	cborutil "github.com/filecoin-project/go-cbor-util"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-multistore"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/specs-actors/actors/builtin/market"
+	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
@@ -26,6 +28,7 @@ import (
 // MakeTestSignedVoucher generates a random SignedVoucher that has all non-zero fields
 func MakeTestSignedVoucher() *paych.SignedVoucher {
 	return &paych.SignedVoucher{
+		ChannelAddr:    address.TestAddress,
 		TimeLockMin:    abi.ChainEpoch(rand.Int63()),
 		TimeLockMax:    0,
 		SecretPreimage: []byte("secret-preimage"),
@@ -65,7 +68,7 @@ func MakeTestSignature() *crypto.Signature {
 
 // MakeTestTokenAmount generates a valid yet random TokenAmount with a non-zero value.
 func MakeTestTokenAmount() abi.TokenAmount {
-	return abi.TokenAmount{Int: big.NewInt(rand.Int63())}
+	return abi.TokenAmount(big.NewInt(rand.Int63()))
 }
 
 // MakeTestQueryResponse generates a valid, random QueryResponse with no non-zero fields
@@ -77,6 +80,7 @@ func MakeTestQueryResponse() retrievalmarket.QueryResponse {
 		MinPricePerByte:            MakeTestTokenAmount(),
 		MaxPaymentInterval:         rand.Uint64(),
 		MaxPaymentIntervalIncrease: rand.Uint64(),
+		UnsealPrice:                big.Zero(),
 	}
 }
 
@@ -90,19 +94,38 @@ func MakeTestDealProposal() retrievalmarket.DealProposal {
 	}
 }
 
-// MakeTestDealProposal generates a valid, random DealResponse
+// MakeTestDealResponse generates a valid, random DealResponse
 func MakeTestDealResponse() retrievalmarket.DealResponse {
-	fakeBlk := retrievalmarket.Block{
-		Prefix: []byte("prefix"),
-		Data:   []byte("data"),
-	}
-
 	return retrievalmarket.DealResponse{
 		Status:      retrievalmarket.DealStatusOngoing,
 		ID:          retrievalmarket.DealID(rand.Uint64()),
 		PaymentOwed: MakeTestTokenAmount(),
 		Message:     "deal response message",
-		Blocks:      []retrievalmarket.Block{fakeBlk},
+	}
+}
+
+// MakeTestChannelID makes a new empty data transfer channel ID
+func MakeTestChannelID() datatransfer.ChannelID {
+	testPeers := GeneratePeers(2)
+	transferID := datatransfer.TransferID(rand.Uint64())
+	return datatransfer.ChannelID{ID: transferID, Initiator: testPeers[0], Responder: testPeers[1]}
+}
+
+// MakeTestRetrievalProviderDeal returns a random valid retrieval provider deal
+func MakeTestRetrievalProviderDeal(status retrievalmarket.DealStatus) *retrievalmarket.ProviderDealState {
+	interval := rand.Uint64()
+	channelID := MakeTestChannelID()
+	return &retrievalmarket.ProviderDealState{
+		Status:          status,
+		ChannelID:       channelID,
+		Receiver:        channelID.Initiator,
+		TotalSent:       interval,
+		CurrentInterval: interval,
+		FundsReceived:   big.Zero(),
+		DealProposal: retrievalmarket.DealProposal{
+			ID:     retrievalmarket.DealID(rand.Uint64()),
+			Params: retrievalmarket.NewParamsV0(MakeTestTokenAmount(), interval, rand.Uint64()),
+		},
 	}
 }
 
@@ -192,24 +215,27 @@ func MakeTestMinerDeal(state storagemarket.StorageDealStatus, clientDealProposal
 		return nil, err
 	}
 
+	id := multistore.StoreID(rand.Uint64())
 	return &storagemarket.MinerDeal{
 		ProposalCid:        proposalNd.Cid(),
 		ClientDealProposal: *clientDealProposal,
 		State:              state,
 		Client:             p,
 		Ref:                dataRef,
+		StoreID:            &id,
 	}, nil
 }
 
 // MakeTestStorageAsk generates a storage ask
 func MakeTestStorageAsk() *storagemarket.StorageAsk {
 	return &storagemarket.StorageAsk{
-		Price:        MakeTestTokenAmount(),
-		MinPieceSize: abi.PaddedPieceSize(rand.Uint64()),
-		Miner:        address.TestAddress2,
-		Timestamp:    abi.ChainEpoch(rand.Int63()),
-		Expiry:       abi.ChainEpoch(rand.Int63()),
-		SeqNo:        rand.Uint64(),
+		Price:         MakeTestTokenAmount(),
+		VerifiedPrice: MakeTestTokenAmount(),
+		MinPieceSize:  abi.PaddedPieceSize(rand.Uint64()),
+		Miner:         address.TestAddress2,
+		Timestamp:     abi.ChainEpoch(rand.Int63()),
+		Expiry:        abi.ChainEpoch(rand.Int63()),
+		SeqNo:         rand.Uint64(),
 	}
 }
 
@@ -263,12 +289,36 @@ func MakeTestStorageAskResponse() smnet.AskResponse {
 	}
 }
 
+// MakeTestDealStatusRequest generates a request to get a provider's query
+func MakeTestDealStatusRequest() smnet.DealStatusRequest {
+	return smnet.DealStatusRequest{
+		Proposal:  GenerateCids(1)[0],
+		Signature: *MakeTestSignature(),
+	}
+}
+
+// MakeTestDealStatusResponse generates a response to an query request
+func MakeTestDealStatusResponse() smnet.DealStatusResponse {
+	proposal := MakeTestUnsignedDealProposal()
+
+	ds := storagemarket.ProviderDealState{
+		Proposal:    &proposal,
+		ProposalCid: &GenerateCids(1)[0],
+		State:       storagemarket.StorageDealActive,
+	}
+
+	return smnet.DealStatusResponse{
+		DealState: ds,
+		Signature: *MakeTestSignature(),
+	}
+}
+
 func RequireGenerateRetrievalPeers(t *testing.T, numPeers int) []retrievalmarket.RetrievalPeer {
 	peers := make([]retrievalmarket.RetrievalPeer, numPeers)
 	for i := range peers {
 		pid, err := test.RandPeerID()
 		require.NoError(t, err)
-		addr, err := address.NewIDAddress(rand.Uint64())
+		addr, err := address.NewIDAddress(uint64(rand.Int63()))
 		require.NoError(t, err)
 		peers[i] = retrievalmarket.RetrievalPeer{
 			Address: addr,
@@ -280,12 +330,12 @@ func RequireGenerateRetrievalPeers(t *testing.T, numPeers int) []retrievalmarket
 
 type FakeDTValidator struct{}
 
-func (v *FakeDTValidator) ValidatePush(sender peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) error {
-	return nil
+func (v *FakeDTValidator) ValidatePush(sender peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.VoucherResult, error) {
+	return nil, nil
 }
 
-func (v *FakeDTValidator) ValidatePull(receiver peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) error {
-	return nil
+func (v *FakeDTValidator) ValidatePull(receiver peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.VoucherResult, error) {
+	return nil, nil
 }
 
 var _ datatransfer.RequestValidator = (*FakeDTValidator)(nil)

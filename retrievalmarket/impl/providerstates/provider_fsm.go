@@ -1,12 +1,10 @@
 package providerstates
 
 import (
-	"fmt"
-
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-statemachine/fsm"
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/abi/big"
-	"golang.org/x/xerrors"
 
 	rm "github.com/filecoin-project/go-fil-markets/retrievalmarket"
 )
@@ -18,63 +16,58 @@ func recordError(deal *rm.ProviderDealState, err error) error {
 
 // ProviderEvents are the events that can happen in a retrieval provider
 var ProviderEvents = fsm.Events{
+	// receiving new deal
 	fsm.Event(rm.ProviderEventOpen).
 		From(rm.DealStatusNew).ToNoChange().
 		Action(
 			func(deal *rm.ProviderDealState) error {
 				deal.TotalSent = 0
 				deal.FundsReceived = abi.NewTokenAmount(0)
+				deal.CurrentInterval = deal.PaymentInterval
 				return nil
 			},
 		),
-	fsm.Event(rm.ProviderEventDealReceived).
-		From(rm.DealStatusNew).To(rm.DealStatusAwaitingAcceptance),
-	fsm.Event(rm.ProviderEventWriteResponseFailed).
-		FromAny().To(rm.DealStatusErrored).
-		Action(func(deal *rm.ProviderDealState, err error) error {
-			deal.Message = xerrors.Errorf("writing deal response: %w", err).Error()
-			return nil
-		}),
-	fsm.Event(rm.ProviderEventDecisioningError).
-		From(rm.DealStatusAwaitingAcceptance).To(rm.DealStatusErrored).
-		Action(recordError),
-	fsm.Event(rm.ProviderEventReadPaymentFailed).
-		FromAny().To(rm.DealStatusErrored).
-		Action(recordError),
-	fsm.Event(rm.ProviderEventGetPieceSizeErrored).
-		From(rm.DealStatusNew).To(rm.DealStatusFailed).
-		Action(recordError),
-	fsm.Event(rm.ProviderEventDealNotFound).
-		From(rm.DealStatusNew).To(rm.DealStatusDealNotFound).
-		Action(func(deal *rm.ProviderDealState) error {
-			deal.Message = rm.ErrNotFound.Error()
-			return nil
-		}),
-	fsm.Event(rm.ProviderEventDealRejected).
-		FromMany(rm.DealStatusNew, rm.DealStatusAwaitingAcceptance).To(rm.DealStatusRejected).
-		Action(recordError),
+
+	// accepting
 	fsm.Event(rm.ProviderEventDealAccepted).
-		From(rm.DealStatusAwaitingAcceptance).To(rm.DealStatusAccepted).
-		Action(func(deal *rm.ProviderDealState, dealProposal rm.DealProposal) error {
-			deal.DealProposal = dealProposal
-			deal.CurrentInterval = deal.PaymentInterval
+		From(rm.DealStatusFundsNeededUnseal).ToNoChange().
+		From(rm.DealStatusNew).To(rm.DealStatusUnsealing).
+		Action(func(deal *rm.ProviderDealState, channelID datatransfer.ChannelID) error {
+			deal.ChannelID = channelID
 			return nil
 		}),
-	fsm.Event(rm.ProviderEventBlockErrored).
-		FromMany(rm.DealStatusAccepted, rm.DealStatusOngoing).To(rm.DealStatusFailed).
+
+	//unsealing
+	fsm.Event(rm.ProviderEventUnsealError).
+		From(rm.DealStatusUnsealing).To(rm.DealStatusFailing).
 		Action(recordError),
-	fsm.Event(rm.ProviderEventBlocksCompleted).
-		FromMany(rm.DealStatusAccepted, rm.DealStatusOngoing).To(rm.DealStatusBlocksComplete),
-	fsm.Event(rm.ProviderEventPaymentRequested).
-		FromMany(rm.DealStatusAccepted, rm.DealStatusOngoing).To(rm.DealStatusFundsNeeded).
-		From(rm.DealStatusBlocksComplete).To(rm.DealStatusFundsNeededLastPayment).
+	fsm.Event(rm.ProviderEventUnsealComplete).
+		From(rm.DealStatusUnsealing).To(rm.DealStatusUnsealed),
+
+	// receiving blocks
+	fsm.Event(rm.ProviderEventBlockSent).
+		FromMany(rm.DealStatusOngoing).ToNoChange().
+		From(rm.DealStatusUnsealed).To(rm.DealStatusOngoing).
 		Action(func(deal *rm.ProviderDealState, totalSent uint64) error {
-			fmt.Println("Requesting payment")
 			deal.TotalSent = totalSent
 			return nil
 		}),
+	fsm.Event(rm.ProviderEventBlocksCompleted).
+		FromMany(rm.DealStatusOngoing).To(rm.DealStatusBlocksComplete),
+
+	// request payment
+	fsm.Event(rm.ProviderEventPaymentRequested).
+		FromMany(rm.DealStatusOngoing, rm.DealStatusUnsealed).To(rm.DealStatusFundsNeeded).
+		From(rm.DealStatusBlocksComplete).To(rm.DealStatusFundsNeededLastPayment).
+		From(rm.DealStatusNew).To(rm.DealStatusFundsNeededUnseal).
+		Action(func(deal *rm.ProviderDealState, totalSent uint64) error {
+			deal.TotalSent = totalSent
+			return nil
+		}),
+
+	// receive and process payment
 	fsm.Event(rm.ProviderEventSaveVoucherFailed).
-		FromMany(rm.DealStatusFundsNeeded, rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusFailed).
+		FromMany(rm.DealStatusFundsNeeded, rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusFailing).
 		Action(recordError),
 	fsm.Event(rm.ProviderEventPartialPaymentReceived).
 		FromMany(rm.DealStatusFundsNeeded, rm.DealStatusFundsNeededLastPayment).ToNoChange().
@@ -85,25 +78,54 @@ var ProviderEvents = fsm.Events{
 	fsm.Event(rm.ProviderEventPaymentReceived).
 		From(rm.DealStatusFundsNeeded).To(rm.DealStatusOngoing).
 		From(rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusFinalizing).
+		From(rm.DealStatusFundsNeededUnseal).To(rm.DealStatusUnsealing).
 		Action(func(deal *rm.ProviderDealState, fundsReceived abi.TokenAmount) error {
 			deal.FundsReceived = big.Add(deal.FundsReceived, fundsReceived)
 			deal.CurrentInterval += deal.PaymentIntervalIncrease
 			return nil
 		}),
-	fsm.Event(rm.ProviderEventComplete).
-		From(rm.DealStatusFinalizing).To(rm.DealStatusCompleted),
+
+	// completing
+	fsm.Event(rm.ProviderEventComplete).FromMany(rm.DealStatusBlocksComplete, rm.DealStatusFinalizing).To(rm.DealStatusCompleting),
+	fsm.Event(rm.ProviderEventCleanupComplete).From(rm.DealStatusCompleting).To(rm.DealStatusCompleted),
+
+	// Error cleanup
+	fsm.Event(rm.ProviderEventCancelComplete).FromMany(rm.DealStatusFailing).To(rm.DealStatusErrored),
+
+	// data transfer errors
+	fsm.Event(rm.ProviderEventDataTransferError).
+		FromAny().To(rm.DealStatusErrored).
+		Action(recordError),
+
+	// multistore errors
+	fsm.Event(rm.ProviderEventMultiStoreError).
+		FromAny().To(rm.DealStatusErrored).
+		Action(recordError),
+
+	fsm.Event(rm.ProviderEventClientCancelled).
+		From(rm.DealStatusFailing).ToJustRecord().
+		FromAny().To(rm.DealStatusCancelled).Action(
+		func(deal *rm.ProviderDealState) error {
+			if deal.Status != rm.DealStatusFailing {
+				deal.Message = "Client cancelled retrieval"
+			}
+			return nil
+		},
+	),
 }
 
 // ProviderStateEntryFuncs are the handlers for different states in a retrieval provider
 var ProviderStateEntryFuncs = fsm.StateEntryFuncs{
-	rm.DealStatusNew:                    ReceiveDeal,
-	rm.DealStatusFailed:                 SendFailResponse,
-	rm.DealStatusRejected:               SendFailResponse,
-	rm.DealStatusDealNotFound:           SendFailResponse,
-	rm.DealStatusOngoing:                SendBlocks,
-	rm.DealStatusAwaitingAcceptance:     DecideOnDeal,
-	rm.DealStatusAccepted:               SendBlocks,
-	rm.DealStatusFundsNeeded:            ProcessPayment,
-	rm.DealStatusFundsNeededLastPayment: ProcessPayment,
-	rm.DealStatusFinalizing:             Finalize,
+	rm.DealStatusFundsNeededUnseal: TrackTransfer,
+	rm.DealStatusUnsealing:         UnsealData,
+	rm.DealStatusUnsealed:          UnpauseDeal,
+	rm.DealStatusFailing:           CancelDeal,
+	rm.DealStatusCompleting:        CleanupDeal,
+}
+
+// ProviderFinalityStates are the terminal states for a retrieval provider
+var ProviderFinalityStates = []fsm.StateKey{
+	rm.DealStatusErrored,
+	rm.DealStatusCompleted,
+	rm.DealStatusCancelled,
 }

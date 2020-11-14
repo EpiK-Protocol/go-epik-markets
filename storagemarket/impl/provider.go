@@ -2,21 +2,24 @@ package storageimpl
 
 import (
 	"context"
+	"fmt"
 	"io"
+
+	"github.com/hannahhoward/go-pubsub"
+	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
+	versionedfsm "github.com/filecoin-project/go-ds-versioning/pkg/fsm"
+	"github.com/filecoin-project/go-multistore"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-statemachine/fsm"
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	"github.com/hannahhoward/go-pubsub"
-	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-datastore"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
-	"github.com/ipld/go-ipld-prime"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/pieceio"
@@ -28,18 +31,21 @@ import (
 	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/dtutils"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/providerstates"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/providerutils"
+	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/requestvalidation"
+	"github.com/filecoin-project/go-fil-markets/storagemarket/migrations"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/network"
 )
 
-var DefaultDealAcceptanceBuffer = abi.ChainEpoch(100)
 var _ storagemarket.StorageProvider = &Provider{}
+var _ network.StorageReceiver = &Provider{}
 
+// StoredAsk is an interface which provides access to a StorageAsk
 type StoredAsk interface {
 	GetAsk() *storagemarket.SignedStorageAsk
-	SetAsk(price abi.TokenAmount, duration abi.ChainEpoch, options ...storagemarket.StorageAskOption) error
+	SetAsk(price abi.TokenAmount, verifiedPrice abi.TokenAmount, duration abi.ChainEpoch, options ...storagemarket.StorageAskOption) error
 }
 
-// Provider is a storage provider implementation
+// Provider is the production implementation of the StorageProvider interface
 type Provider struct {
 	net network.StorageMarketNetwork
 
@@ -47,6 +53,7 @@ type Provider struct {
 
 	spn                       storagemarket.StorageProviderNode
 	fs                        filestore.FileStore
+	multiStore                *multistore.MultiStore
 	pio                       pieceio.PieceIOWithStore
 	pieceStore                piecestore.PieceStore
 	conns                     *connmanager.ConnManager
@@ -55,28 +62,23 @@ type Provider struct {
 	dataTransfer              datatransfer.Manager
 	universalRetrievalEnabled bool
 	customDealDeciderFunc     DealDeciderFunc
-	dealAcceptanceBuffer      abi.ChainEpoch
 	pubSub                    *pubsub.PubSub
+	readySub                  *pubsub.PubSub
 
-	deals fsm.Group
+	deals        fsm.Group
+	migrateDeals func(context.Context) error
+
+	unsubDataTransfer datatransfer.Unsubscribe
 }
 
 // StorageProviderOption allows custom configuration of a storage provider
 type StorageProviderOption func(p *Provider)
 
 // EnableUniversalRetrieval causes a storage provider to track all CIDs in a piece,
-// so that any CID, not just the root, can be retrieved
+// so that any CID, not just the root payload CID, can be retrieved
 func EnableUniversalRetrieval() StorageProviderOption {
 	return func(p *Provider) {
 		p.universalRetrievalEnabled = true
-	}
-}
-
-// DealAcceptanceBuffer allows a provider to set a buffer (in epochs) to account for the time
-// required for data transfer, deal verification, publishing, sealing, and committing.
-func DealAcceptanceBuffer(buffer abi.ChainEpoch) StorageProviderOption {
-	return func(p *Provider) {
-		p.dealAcceptanceBuffer = buffer
 	}
 }
 
@@ -99,8 +101,8 @@ func CustomDealDecisionLogic(decider DealDeciderFunc) StorageProviderOption {
 // NewProvider returns a new storage provider
 func NewProvider(net network.StorageMarketNetwork,
 	ds datastore.Batching,
-	bs blockstore.Blockstore,
 	fs filestore.FileStore,
+	multiStore *multistore.MultiStore,
 	pieceStore piecestore.PieceStore,
 	dataTransfer datatransfer.Manager,
 	spn storagemarket.StorageProviderNode,
@@ -110,57 +112,99 @@ func NewProvider(net network.StorageMarketNetwork,
 	options ...StorageProviderOption,
 ) (storagemarket.StorageProvider, error) {
 	carIO := cario.NewCarIO()
-	pio := pieceio.NewPieceIOWithStore(carIO, fs, bs)
+	pio := pieceio.NewPieceIOWithStore(carIO, fs, nil, multiStore)
 
 	h := &Provider{
-		net:                  net,
-		proofType:            rt,
-		spn:                  spn,
-		fs:                   fs,
-		pio:                  pio,
-		pieceStore:           pieceStore,
-		conns:                connmanager.NewConnManager(),
-		storedAsk:            storedAsk,
-		actor:                minerAddress,
-		dataTransfer:         dataTransfer,
-		dealAcceptanceBuffer: DefaultDealAcceptanceBuffer,
-		pubSub:               pubsub.New(providerDispatcher),
+		net:          net,
+		proofType:    rt,
+		spn:          spn,
+		fs:           fs,
+		multiStore:   multiStore,
+		pio:          pio,
+		pieceStore:   pieceStore,
+		conns:        connmanager.NewConnManager(),
+		storedAsk:    storedAsk,
+		actor:        minerAddress,
+		dataTransfer: dataTransfer,
+		pubSub:       pubsub.New(providerDispatcher),
+		readySub:     pubsub.New(shared.ReadyDispatcher),
 	}
-
-	deals, err := NewProviderStateMachine(
+	storageMigrations, err := migrations.ProviderMigrations.Build()
+	if err != nil {
+		return nil, err
+	}
+	h.deals, h.migrateDeals, err = newProviderStateMachine(
 		ds,
 		&providerDealEnvironment{h},
 		h.dispatch,
+		storageMigrations,
+		versioning.VersionKey("1"),
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	h.deals = deals
-
 	h.Configure(options...)
 
 	// register a data transfer event handler -- this will send events to the state machines based on DT events
-	dataTransfer.SubscribeToEvents(dtutils.ProviderDataTransferSubscriber(deals))
+	h.unsubDataTransfer = dataTransfer.SubscribeToEvents(dtutils.ProviderDataTransferSubscriber(h.deals))
+
+	err = dataTransfer.RegisterVoucherType(&requestvalidation.StorageDataTransferVoucher{}, requestvalidation.NewUnifiedRequestValidator(&providerPushDeals{h}, nil))
+	if err != nil {
+		return nil, err
+	}
+
+	err = dataTransfer.RegisterTransportConfigurer(&requestvalidation.StorageDataTransferVoucher{}, dtutils.TransportConfigurer(&providerStoreGetter{h}))
+	if err != nil {
+		return nil, err
+	}
 
 	return h, nil
 }
 
+// Start initializes deal processing on a StorageProvider and restarts in progress deals.
+// It also registers the provider with a StorageMarketNetwork so it can receive incoming
+// messages on the storage market's libp2p protocols
 func (p *Provider) Start(ctx context.Context) error {
-	// TODO: restore state
 	err := p.net.SetDelegate(p)
 	if err != nil {
 		return err
 	}
 	go func() {
-		err := p.restartDeals()
+		err := p.start(ctx)
 		if err != nil {
-			log.Errorf("Failed to restart deals: %s", err.Error())
+			log.Error(err.Error())
 		}
 	}()
 	return nil
 }
 
+// OnReady registers a listener for when the provider has finished starting up
+func (p *Provider) OnReady(ready shared.ReadyFunc) {
+	p.readySub.Subscribe(ready)
+}
+
+/*
+HandleDealStream is called by the network implementation whenever a new message is received on the deal protocol
+
+It initiates the provider side of the deal flow.
+
+When a provider receives a DealProposal of the deal protocol, it takes the following steps:
+
+1. Calculates the CID for the received ClientDealProposal.
+
+2. Constructs a MinerDeal to track the state of this deal.
+
+3. Tells its statemachine to begin tracking this deal state by CID of the received ClientDealProposal
+
+4. Tracks the received deal stream by the CID of the ClientDealProposal
+
+4. Triggers a `ProviderEventOpen` event on its statemachine.
+
+From then on, the statemachine controls the deal flow in the client. Other components may listen for events in this flow by calling
+`SubscribeToEvents` on the Provider. The Provider handles loading the next block to send to the client.
+
+Documentation of the client state machine can be found at https://godoc.org/github.com/filecoin-project/go-fil-markets/storagemarket/impl/providerstates
+*/
 func (p *Provider) HandleDealStream(s network.StorageDealStream) {
 	log.Info("Handling storage deal proposal!")
 
@@ -183,6 +227,24 @@ func (p *Provider) receiveDeal(s network.StorageDealStream) error {
 		return err
 	}
 
+	// Check if we are already tracking this deal
+	var md storagemarket.MinerDeal
+	if err := p.deals.Get(proposalNd.Cid()).Get(&md); err == nil {
+		// We are already tracking this deal, for some reason it was re-proposed, perhaps because of a client restart
+		// this is ok, just send a response back.
+		return p.resendProposalResponse(s, &md)
+	}
+
+	var storeIDForDeal *multistore.StoreID
+	if proposal.Piece.TransferType != storagemarket.TTManual {
+		nextStoreID := p.multiStore.Next()
+		// make sure store is initialized, even if we don't use it yet
+		_, err = p.multiStore.Get(nextStoreID)
+		if err != nil {
+			return err
+		}
+		storeIDForDeal = &nextStoreID
+	}
 	deal := &storagemarket.MinerDeal{
 		Client:             s.RemotePeer(),
 		Miner:              p.net.ID(),
@@ -190,6 +252,9 @@ func (p *Provider) receiveDeal(s network.StorageDealStream) error {
 		ProposalCid:        proposalNd.Cid(),
 		State:              storagemarket.StorageDealUnknown,
 		Ref:                proposal.Piece,
+		FastRetrieval:      proposal.FastRetrieval,
+		StoreID:            storeIDForDeal,
+		CreationTime:       curTime(),
 	}
 
 	err = p.deals.Begin(proposalNd.Cid(), deal)
@@ -203,7 +268,9 @@ func (p *Provider) receiveDeal(s network.StorageDealStream) error {
 	return p.deals.Send(proposalNd.Cid(), storagemarket.ProviderEventOpen)
 }
 
+// Stop terminates processing of deals on a StorageProvider
 func (p *Provider) Stop() error {
+	p.unsubDataTransfer()
 	err := p.deals.Stop(context.TODO())
 	if err != nil {
 		return err
@@ -211,6 +278,9 @@ func (p *Provider) Stop() error {
 	return p.net.StopHandlingRequests()
 }
 
+// ImportDataForDeal manually imports data for an offline storage deal
+// It will verify that the data in the passed io.Reader matches the expected piece
+// cid for the given deal or it will error
 func (p *Provider) ImportDataForDeal(ctx context.Context, propCid cid.Cid, data io.Reader) error {
 	// TODO: be able to check if we have enough disk space
 	var d storagemarket.MinerDeal
@@ -259,19 +329,12 @@ func (p *Provider) ImportDataForDeal(ctx context.Context, propCid cid.Cid, data 
 
 }
 
+// GetAsk returns the storage miner's ask, or nil if one does not exist.
 func (p *Provider) GetAsk() *storagemarket.SignedStorageAsk {
 	return p.storedAsk.GetAsk()
 }
 
-func (p *Provider) ListDeals(ctx context.Context) ([]storagemarket.StorageDeal, error) {
-	tok, _, err := p.spn.GetChainHead(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return p.spn.ListProviderDeals(ctx, p.actor, tok)
-}
-
+// AddStorageCollateral adds storage collateral
 func (p *Provider) AddStorageCollateral(ctx context.Context, amount abi.TokenAmount) error {
 	done := make(chan error, 1)
 
@@ -280,7 +343,7 @@ func (p *Provider) AddStorageCollateral(ctx context.Context, amount abi.TokenAmo
 		return err
 	}
 
-	err = p.spn.WaitForMessage(ctx, mcid, func(code exitcode.ExitCode, bytes []byte, err error) error {
+	err = p.spn.WaitForMessage(ctx, mcid, func(code exitcode.ExitCode, bytes []byte, finalCid cid.Cid, err error) error {
 		if err != nil {
 			done <- xerrors.Errorf("AddFunds errored: %w", err)
 		} else if code != exitcode.Ok {
@@ -298,6 +361,7 @@ func (p *Provider) AddStorageCollateral(ctx context.Context, amount abi.TokenAmo
 	return <-done
 }
 
+// GetStorageCollateral returns the current collateral balance
 func (p *Provider) GetStorageCollateral(ctx context.Context) (storagemarket.Balance, error) {
 	tok, _, err := p.spn.GetChainHead(ctx)
 	if err != nil {
@@ -307,6 +371,7 @@ func (p *Provider) GetStorageCollateral(ctx context.Context) (storagemarket.Bala
 	return p.spn.GetBalance(ctx, p.actor, tok)
 }
 
+// ListLocalDeals lists deals processed by this storage provider
 func (p *Provider) ListLocalDeals() ([]storagemarket.MinerDeal, error) {
 	var out []storagemarket.MinerDeal
 	if err := p.deals.List(&out); err != nil {
@@ -315,10 +380,23 @@ func (p *Provider) ListLocalDeals() ([]storagemarket.MinerDeal, error) {
 	return out, nil
 }
 
-func (p *Provider) SetAsk(price abi.TokenAmount, duration abi.ChainEpoch, options ...storagemarket.StorageAskOption) error {
-	return p.storedAsk.SetAsk(price, duration, options...)
+// SetAsk configures the storage miner's ask with the provided price,
+// duration, and options. Any previously-existing ask is replaced.
+func (p *Provider) SetAsk(price abi.TokenAmount, verifiedPrice abi.TokenAmount, duration abi.ChainEpoch, options ...storagemarket.StorageAskOption) error {
+	return p.storedAsk.SetAsk(price, verifiedPrice, duration, options...)
 }
 
+/*
+HandleAskStream is called by the network implementation whenever a new message is received on the ask protocol
+
+A Provider handling a `AskRequest` does the following:
+
+1. Reads the current signed storage ask from storage
+
+2. Wraps the signed ask in an AskResponse and writes it on the StorageAskStream
+
+The connection is kept open only as long as the request-response exchange.
+*/
 func (p *Provider) HandleAskStream(s network.StorageAskStream) {
 	defer s.Close()
 	ar, err := s.ReadAskRequest()
@@ -338,26 +416,109 @@ func (p *Provider) HandleAskStream(s network.StorageAskStream) {
 		Ask: ask,
 	}
 
-	if err := s.WriteAskResponse(resp); err != nil {
+	if err := s.WriteAskResponse(resp, p.sign); err != nil {
 		log.Errorf("failed to write ask response: %s", err)
 		return
 	}
 }
 
+/*
+HandleDealStatusStream is called by the network implementation whenever a new message is received on the deal status protocol
+
+A Provider handling a `DealStatuRequest` does the following:
+
+1. Lots the deal state from the Provider FSM
+
+2. Verifies the signature on the DealStatusRequest matches the Client for this deal
+
+3. Constructs a ProviderDealState from the deal state
+
+4. Signs the ProviderDealState with its private key
+
+5. Writes a DealStatusResponse with the ProviderDealState and signature onto the DealStatusStream
+
+The connection is kept open only as long as the request-response exchange.
+*/
+func (p *Provider) HandleDealStatusStream(s network.DealStatusStream) {
+	ctx := context.TODO()
+	defer s.Close()
+	request, err := s.ReadDealStatusRequest()
+	if err != nil {
+		log.Errorf("failed to read DealStatusRequest from incoming stream: %s", err)
+		return
+	}
+
+	// fetch deal state
+	var md = storagemarket.MinerDeal{}
+	if err := p.deals.Get(request.Proposal).Get(&md); err != nil {
+		log.Errorf("proposal doesn't exist in state store: %s", err)
+		return
+	}
+
+	// verify query signature
+	buf, err := cborutil.Dump(&request.Proposal)
+	if err != nil {
+		log.Errorf("failed to serialize status request: %s", err)
+		return
+	}
+
+	tok, _, err := p.spn.GetChainHead(ctx)
+	if err != nil {
+		log.Errorf("failed to get chain head: %s", err)
+		return
+	}
+
+	err = providerutils.VerifySignature(ctx, request.Signature, md.ClientDealProposal.Proposal.Client, buf, tok, p.spn.VerifySignature)
+	if err != nil {
+		log.Errorf("invalid deal status request signature: %s", err)
+		return
+	}
+
+	dealState := storagemarket.ProviderDealState{
+		State:         md.State,
+		Message:       md.Message,
+		Proposal:      &md.Proposal,
+		ProposalCid:   &md.ProposalCid,
+		AddFundsCid:   md.AddFundsCid,
+		PublishCid:    md.PublishCid,
+		DealID:        md.DealID,
+		FastRetrieval: md.FastRetrieval,
+	}
+
+	signature, err := p.sign(ctx, &dealState)
+	if err != nil {
+		log.Errorf("failed to sign deal status response: %s", err)
+		return
+	}
+
+	response := network.DealStatusResponse{
+		DealState: dealState,
+		Signature: *signature,
+	}
+
+	if err := s.WriteDealStatusResponse(response, p.sign); err != nil {
+		log.Warnf("failed to write deal status response: %s", err)
+		return
+	}
+}
+
+// Configure applies the given list of StorageProviderOptions after a StorageProvider
+// is initialized
 func (p *Provider) Configure(options ...StorageProviderOption) {
 	for _, option := range options {
 		option(p)
 	}
 }
 
-func (p *Provider) DealAcceptanceBuffer() abi.ChainEpoch {
-	return p.dealAcceptanceBuffer
-}
-
+// UniversalRetrievalEnabled returns whether or not universal retrieval
+// (retrieval by any CID, not just the root payload CID) is enabled
+// for this provider
 func (p *Provider) UniversalRetrievalEnabled() bool {
 	return p.universalRetrievalEnabled
 }
 
+// SubscribeToEvents allows another component to listen for events on the StorageProvider
+// in order to track deals as they progress through the deal flow
 func (p *Provider) SubscribeToEvents(subscriber storagemarket.ProviderSubscriber) shared.Unsubscribe {
 	return shared.Unsubscribe(p.pubSub.Subscribe(subscriber))
 }
@@ -380,25 +541,34 @@ func (p *Provider) dispatch(eventName fsm.EventName, deal fsm.StateType) {
 	}
 }
 
-func (c *Provider) restartDeals() error {
+func (p *Provider) start(ctx context.Context) error {
+	err := p.migrateDeals(ctx)
+	publishErr := p.readySub.Publish(err)
+	if publishErr != nil {
+		log.Warnf("Publish storage provider ready event: %s", err.Error())
+	}
+	if err != nil {
+		return fmt.Errorf("Migrating storage provider state machines: %w", err)
+	}
+	if err := p.restartDeals(); err != nil {
+		return fmt.Errorf("Failed to restart deals: %w", err)
+	}
+	return nil
+}
+
+func (p *Provider) restartDeals() error {
 	var deals []storagemarket.MinerDeal
-	err := c.deals.List(&deals)
+	err := p.deals.List(&deals)
 	if err != nil {
 		return err
 	}
 
 	for _, deal := range deals {
-		if c.deals.IsTerminated(deal) {
+		if p.deals.IsTerminated(deal) {
 			continue
 		}
 
-		if deal.ConnectionClosed {
-			continue
-		}
-
-		// TODO: Fixup deal streams if necessary...
-
-		err = c.deals.Send(deal.ProposalCid, storagemarket.ProviderEventRestart)
+		err = p.deals.Send(deal.ProposalCid, storagemarket.ProviderEventRestart)
 		if err != nil {
 			return err
 		}
@@ -406,8 +576,33 @@ func (c *Provider) restartDeals() error {
 	return nil
 }
 
-func NewProviderStateMachine(ds datastore.Datastore, env fsm.Environment, notifier fsm.Notifier) (fsm.Group, error) {
-	return fsm.New(ds, fsm.Parameters{
+func (p *Provider) sign(ctx context.Context, data interface{}) (*crypto.Signature, error) {
+	tok, _, err := p.spn.GetChainHead(ctx)
+	if err != nil {
+		return nil, xerrors.Errorf("couldn't get chain head: %w", err)
+	}
+
+	return providerutils.SignMinerData(ctx, data, p.actor, tok, p.spn.GetMinerWorkerAddress, p.spn.SignBytes)
+}
+
+func (p *Provider) resendProposalResponse(s network.StorageDealStream, md *storagemarket.MinerDeal) error {
+	resp := &network.Response{State: md.State, Message: md.Message, Proposal: md.ProposalCid}
+	sig, err := p.sign(context.TODO(), resp)
+	if err != nil {
+		return xerrors.Errorf("failed to sign response message: %w", err)
+	}
+
+	err = s.WriteDealResponse(network.SignedResponse{Response: *resp, Signature: sig}, p.sign)
+
+	if closeErr := s.Close(); closeErr != nil {
+		log.Warnf("closing connection: %v", err)
+	}
+
+	return err
+}
+
+func newProviderStateMachine(ds datastore.Batching, env fsm.Environment, notifier fsm.Notifier, storageMigrations versioning.VersionedMigrationList, target versioning.VersionKey) (fsm.Group, func(context.Context) error, error) {
+	return versionedfsm.NewVersionedFSM(ds, fsm.Parameters{
 		Environment:     env,
 		StateType:       storagemarket.MinerDeal{},
 		StateKeyField:   "State",
@@ -415,7 +610,7 @@ func NewProviderStateMachine(ds datastore.Datastore, env fsm.Environment, notifi
 		StateEntryFuncs: providerstates.ProviderStateEntryFuncs,
 		FinalityStates:  providerstates.ProviderFinalityStates,
 		Notifier:        notifier,
-	})
+	}, storageMigrations, target)
 }
 
 type internalProviderEvent struct {
@@ -436,107 +631,12 @@ func providerDispatcher(evt pubsub.Event, fn pubsub.SubscriberFn) error {
 	return nil
 }
 
-// -------
-// providerDealEnvironment
-// -------
-
-type providerDealEnvironment struct {
-	p *Provider
+// ProviderFSMParameterSpec is a valid set of parameters for a provider FSM - used in doc generation
+var ProviderFSMParameterSpec = fsm.Parameters{
+	Environment:     &providerDealEnvironment{},
+	StateType:       storagemarket.MinerDeal{},
+	StateKeyField:   "State",
+	Events:          providerstates.ProviderEvents,
+	StateEntryFuncs: providerstates.ProviderStateEntryFuncs,
+	FinalityStates:  providerstates.ProviderFinalityStates,
 }
-
-func (p *providerDealEnvironment) Address() address.Address {
-	return p.p.actor
-}
-
-func (p *providerDealEnvironment) Node() storagemarket.StorageProviderNode {
-	return p.p.spn
-}
-
-func (p *providerDealEnvironment) Ask() storagemarket.StorageAsk {
-	sask := p.p.storedAsk.GetAsk()
-	if sask == nil {
-		return storagemarket.StorageAskUndefined
-	}
-	return *sask.Ask
-}
-
-func (p *providerDealEnvironment) StartDataTransfer(ctx context.Context, to peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) error {
-	_, err := p.p.dataTransfer.OpenPullDataChannel(ctx, to, voucher, baseCid, selector)
-	return err
-}
-
-func (p *providerDealEnvironment) GeneratePieceCommitmentToFile(payloadCid cid.Cid, selector ipld.Node) (cid.Cid, filestore.Path, filestore.Path, error) {
-	if p.p.universalRetrievalEnabled {
-		return providerutils.GeneratePieceCommitmentWithMetadata(p.p.fs, p.p.pio.GeneratePieceCommitmentToFile, p.p.proofType, payloadCid, selector)
-	}
-	pieceCid, piecePath, _, err := p.p.pio.GeneratePieceCommitmentToFile(p.p.proofType, payloadCid, selector)
-	return pieceCid, piecePath, filestore.Path(""), err
-}
-
-func (p *providerDealEnvironment) FileStore() filestore.FileStore {
-	return p.p.fs
-}
-
-func (p *providerDealEnvironment) PieceStore() piecestore.PieceStore {
-	return p.p.pieceStore
-}
-
-func (p *providerDealEnvironment) SendSignedResponse(ctx context.Context, resp *network.Response) error {
-	s, err := p.p.conns.DealStream(resp.Proposal)
-	if err != nil {
-		return xerrors.Errorf("couldn't send response: %w", err)
-	}
-
-	tok, _, err := p.p.spn.GetChainHead(ctx)
-	if err != nil {
-		return xerrors.Errorf("couldn't get chain head: %w", err)
-	}
-
-	sig, err := providerutils.SignMinerData(ctx, resp, p.p.actor, tok, p.Node().GetMinerWorkerAddress, p.Node().SignBytes)
-	if err != nil {
-		return xerrors.Errorf("failed to sign response message: %w", err)
-	}
-
-	signedResponse := network.SignedResponse{
-		Response:  *resp,
-		Signature: sig,
-	}
-
-	err = s.WriteDealResponse(signedResponse)
-	if err != nil {
-		// Assume client disconnected
-		_ = p.p.conns.Disconnect(resp.Proposal)
-	}
-	return err
-}
-
-func (p *providerDealEnvironment) TagConnection(proposalCid cid.Cid) error {
-	s, err := p.p.conns.DealStream(proposalCid)
-	if err != nil {
-		return err
-	}
-	s.TagProtectedConnection(proposalCid.String())
-	return nil
-}
-
-func (p *providerDealEnvironment) Disconnect(proposalCid cid.Cid) error {
-	s, err := p.p.conns.DealStream(proposalCid)
-	if err != nil {
-		return err
-	}
-	s.UntagProtectedConnection(proposalCid.String())
-	return p.p.conns.Disconnect(proposalCid)
-}
-
-func (p *providerDealEnvironment) DealAcceptanceBuffer() abi.ChainEpoch {
-	return p.p.dealAcceptanceBuffer
-}
-
-func (p *providerDealEnvironment) RunCustomDecisionLogic(ctx context.Context, deal storagemarket.MinerDeal) (bool, string, error) {
-	if p.p.customDealDeciderFunc == nil {
-		return true, "", nil
-	}
-	return p.p.customDealDeciderFunc(ctx, deal)
-}
-
-var _ providerstates.ProviderDealEnvironment = &providerDealEnvironment{}

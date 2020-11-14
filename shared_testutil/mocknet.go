@@ -13,10 +13,8 @@ import (
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
 	dss "github.com/ipfs/go-datastore/sync"
-	"github.com/ipfs/go-graphsync"
-	graphsyncimpl "github.com/ipfs/go-graphsync/impl"
-	"github.com/ipfs/go-graphsync/network"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	chunk "github.com/ipfs/go-ipfs-chunker"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
@@ -33,6 +31,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
+	dtnet "github.com/filecoin-project/go-data-transfer/network"
+	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-storedcounter"
 )
 
@@ -46,10 +46,14 @@ type Libp2pTestData struct {
 	RetrievalStoredCounter2 *storedcounter.StoredCounter
 	Bs1                     bstore.Blockstore
 	Bs2                     bstore.Blockstore
+	MultiStore1             *multistore.MultiStore
+	MultiStore2             *multistore.MultiStore
 	DagService1             ipldformat.DAGService
 	DagService2             ipldformat.DAGService
-	GraphSync1              graphsync.GraphExchange
-	GraphSync2              graphsync.GraphExchange
+	DTNet1                  dtnet.DataTransferNetwork
+	DTNet2                  dtnet.DataTransferNetwork
+	DTStore1                datastore.Batching
+	DTStore2                datastore.Batching
 	Loader1                 ipld.Loader
 	Loader2                 ipld.Loader
 	Storer1                 ipld.Storer
@@ -57,6 +61,8 @@ type Libp2pTestData struct {
 	Host1                   host.Host
 	Host2                   host.Host
 	OrigBytes               []byte
+
+	MockNet mocknet.Mocknet
 }
 
 func NewLibp2pTestData(ctx context.Context, t *testing.T) *Libp2pTestData {
@@ -94,6 +100,8 @@ func NewLibp2pTestData(ctx context.Context, t *testing.T) *Libp2pTestData {
 			return &buf, committer, nil
 		}
 	}
+	var err error
+
 	testData.Ds1 = dss.MutexWrap(datastore.NewMapDatastore())
 	testData.Ds2 = dss.MutexWrap(datastore.NewMapDatastore())
 
@@ -106,6 +114,11 @@ func NewLibp2pTestData(ctx context.Context, t *testing.T) *Libp2pTestData {
 	// make a bstore and dag service
 	testData.Bs1 = bstore.NewBlockstore(testData.Ds1)
 	testData.Bs2 = bstore.NewBlockstore(testData.Ds2)
+
+	testData.MultiStore1, err = multistore.NewMultiDstore(testData.Ds1)
+	require.NoError(t, err)
+	testData.MultiStore2, err = multistore.NewMultiDstore(testData.Ds2)
+	require.NoError(t, err)
 
 	testData.DagService1 = merkledag.NewDAGService(blockservice.New(testData.Bs1, offline.Exchange(testData.Bs1)))
 	testData.DagService2 = merkledag.NewDAGService(blockservice.New(testData.Bs2, offline.Exchange(testData.Bs2)))
@@ -121,7 +134,6 @@ func NewLibp2pTestData(ctx context.Context, t *testing.T) *Libp2pTestData {
 	mn := mocknet.New(ctx)
 
 	// setup network
-	var err error
 	testData.Host1, err = mn.GenPeer()
 	require.NoError(t, err)
 
@@ -131,8 +143,13 @@ func NewLibp2pTestData(ctx context.Context, t *testing.T) *Libp2pTestData {
 	err = mn.LinkAll()
 	require.NoError(t, err)
 
-	testData.GraphSync1 = graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host1), testData.Loader1, testData.Storer1)
-	testData.GraphSync2 = graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host2), testData.Loader2, testData.Storer2)
+	testData.DTNet1 = dtnet.NewFromLibp2pHost(testData.Host1)
+	testData.DTNet2 = dtnet.NewFromLibp2pHost(testData.Host2)
+
+	testData.DTStore1 = namespace.Wrap(testData.Ds1, datastore.NewKey("DataTransfer1"))
+	testData.DTStore2 = namespace.Wrap(testData.Ds1, datastore.NewKey("DataTransfer2"))
+
+	testData.MockNet = mn
 
 	return testData
 }
@@ -144,6 +161,37 @@ const unixfsLinksPerLevel = 1024
 // fixtures directory. If useSecondNode is true, fixture is injected to the second node;
 // otherwise the first node gets it
 func (ltd *Libp2pTestData) LoadUnixFSFile(t *testing.T, fixturesPath string, useSecondNode bool) ipld.Link {
+	var dagService ipldformat.DAGService
+	if useSecondNode {
+		dagService = ltd.DagService2
+	} else {
+		dagService = ltd.DagService1
+	}
+	return ltd.loadUnixFSFile(t, fixturesPath, dagService)
+}
+
+// LoadUnixFSFileToStore injects the fixture `filename` from the
+// fixtures directory, creating a new multistore in the process. If useSecondNode is true,
+// fixture is injected to the second node. Otherwise the first node gets it
+func (ltd *Libp2pTestData) LoadUnixFSFileToStore(t *testing.T, fixturesPath string, useSecondNode bool) (ipld.Link, multistore.StoreID) {
+	var storeID multistore.StoreID
+	var dagService ipldformat.DAGService
+	if useSecondNode {
+		storeID = ltd.MultiStore2.Next()
+		store, err := ltd.MultiStore2.Get(storeID)
+		require.NoError(t, err)
+		dagService = store.DAG
+	} else {
+		storeID = ltd.MultiStore1.Next()
+		store, err := ltd.MultiStore1.Get(storeID)
+		require.NoError(t, err)
+		dagService = store.DAG
+	}
+	link := ltd.loadUnixFSFile(t, fixturesPath, dagService)
+	return link, storeID
+}
+
+func (ltd *Libp2pTestData) loadUnixFSFile(t *testing.T, fixturesPath string, dagService ipldformat.DAGService) ipld.Link {
 
 	// read in a fixture file
 	fpath, err := filepath.Abs(filepath.Join(thisDir(t), "..", fixturesPath))
@@ -157,12 +205,6 @@ func (ltd *Libp2pTestData) LoadUnixFSFile(t *testing.T, fixturesPath string, use
 	file := files.NewReaderFile(tr)
 
 	// import to UnixFS
-	var dagService ipldformat.DAGService
-	if useSecondNode {
-		dagService = ltd.DagService2
-	} else {
-		dagService = ltd.DagService1
-	}
 	bufferedDS := ipldformat.NewBufferedDAG(ltd.Ctx, dagService)
 
 	params := helpers.DagBuilderParams{
@@ -201,6 +243,26 @@ func (ltd *Libp2pTestData) VerifyFileTransferred(t *testing.T, link ipld.Link, u
 	} else {
 		dagService = ltd.DagService1
 	}
+	ltd.verifyFileTransferred(t, link, dagService, readLen)
+}
+
+// VerifyFileTransferredIntoStore checks that the fixture file was sent from one node to the other, into the store specified by
+// storeID
+func (ltd *Libp2pTestData) VerifyFileTransferredIntoStore(t *testing.T, link ipld.Link, storeID multistore.StoreID, useSecondNode bool, readLen uint64) {
+	var dagService ipldformat.DAGService
+	if useSecondNode {
+		store, err := ltd.MultiStore2.Get(storeID)
+		require.NoError(t, err)
+		dagService = store.DAG
+	} else {
+		store, err := ltd.MultiStore1.Get(storeID)
+		require.NoError(t, err)
+		dagService = store.DAG
+	}
+	ltd.verifyFileTransferred(t, link, dagService, readLen)
+}
+
+func (ltd *Libp2pTestData) verifyFileTransferred(t *testing.T, link ipld.Link, dagService ipldformat.DAGService, readLen uint64) {
 
 	c := link.(cidlink.Link).Cid
 

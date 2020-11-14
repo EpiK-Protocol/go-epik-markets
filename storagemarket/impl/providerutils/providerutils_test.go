@@ -7,16 +7,18 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/actors/crypto"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car"
 	"github.com/ipld/go-ipld-prime"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-multistore"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/specs-actors/actors/builtin/market"
 
 	"github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/shared"
@@ -120,8 +122,9 @@ func TestCommPGenerationWithMetadata(t *testing.T) {
 	tempFilePath := filestore.Path("applesauce.jpg")
 	tempFile := shared_testutil.NewTestFile(shared_testutil.TestFileParams{Path: tempFilePath})
 	payloadCid := shared_testutil.GenerateCids(1)[0]
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Style.Any)
+	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
 	selector := ssb.ExploreAll(ssb.Matcher()).Node()
+	storeID := multistore.StoreID(4)
 	proofType := abi.RegisteredSealProof_StackedDrg2KiBV1
 	pieceCid := shared_testutil.GenerateCids(1)[0]
 	piecePath := filestore.Path("apiece.jpg")
@@ -162,7 +165,7 @@ func TestCommPGenerationWithMetadata(t *testing.T) {
 			fcp := &fakeCommPGenerator{pieceCid, piecePath, pieceSize, testCase.commPErr}
 			fs := shared_testutil.NewTestFileStore(testCase.fileStoreParams)
 			resultPieceCid, resultPiecePath, resultMetadataPath, resultErr := providerutils.GeneratePieceCommitmentWithMetadata(
-				fs, fcp.GenerateCommPToFile, proofType, payloadCid, selector)
+				fs, fcp.GenerateCommPToFile, proofType, payloadCid, selector, &storeID)
 			require.Equal(t, resultPieceCid, testCase.expectedPieceCid)
 			require.Equal(t, resultPiecePath, testCase.expectedPiecePath)
 			require.Equal(t, resultMetadataPath, testCase.expectedMetadataPath)
@@ -183,7 +186,7 @@ type fakeCommPGenerator struct {
 	err      error
 }
 
-func (fcp *fakeCommPGenerator) GenerateCommPToFile(abi.RegisteredSealProof, cid.Cid, ipld.Node, ...car.OnNewCarBlockFunc) (cid.Cid, filestore.Path, abi.UnpaddedPieceSize, error) {
+func (fcp *fakeCommPGenerator) GenerateCommPToFile(abi.RegisteredSealProof, cid.Cid, ipld.Node, *multistore.StoreID, ...car.OnNewCarBlockFunc) (cid.Cid, filestore.Path, abi.UnpaddedPieceSize, error) {
 	return fcp.pieceCid, fcp.path, fcp.size, fcp.err
 }
 

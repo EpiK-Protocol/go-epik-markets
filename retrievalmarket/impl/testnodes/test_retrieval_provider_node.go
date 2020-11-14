@@ -9,10 +9,11 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/shared"
@@ -26,9 +27,9 @@ type expectedVoucherKey struct {
 }
 
 type sectorKey struct {
-	sectorID uint64
-	offset   uint64
-	length   uint64
+	sectorID abi.SectorNumber
+	offset   abi.UnpaddedPieceSize
+	length   abi.UnpaddedPieceSize
 }
 
 type voucherResult struct {
@@ -39,6 +40,7 @@ type voucherResult struct {
 // TestRetrievalProviderNode is a node adapter for a retrieval provider whose
 // responses are mocked
 type TestRetrievalProviderNode struct {
+	ChainHeadError   error
 	sectorStubs      map[sectorKey][]byte
 	expectations     map[sectorKey]struct{}
 	received         map[sectorKey]struct{}
@@ -60,26 +62,26 @@ func NewTestRetrievalProviderNode() *TestRetrievalProviderNode {
 }
 
 // StubUnseal stubs a response to attempting to unseal a sector with the given paramters
-func (trpn *TestRetrievalProviderNode) StubUnseal(sectorID uint64, offset uint64, length uint64, data []byte) {
+func (trpn *TestRetrievalProviderNode) StubUnseal(sectorID abi.SectorNumber, offset, length abi.UnpaddedPieceSize, data []byte) {
 	trpn.sectorStubs[sectorKey{sectorID, offset, length}] = data
 }
 
 // ExpectFailedUnseal indicates an expectation that a call will be made to unseal
 // a sector with the given params and should fail
-func (trpn *TestRetrievalProviderNode) ExpectFailedUnseal(sectorID uint64, offset uint64, length uint64) {
+func (trpn *TestRetrievalProviderNode) ExpectFailedUnseal(sectorID abi.SectorNumber, offset, length abi.UnpaddedPieceSize) {
 	trpn.expectations[sectorKey{sectorID, offset, length}] = struct{}{}
 }
 
 // ExpectUnseal indicates an expectation that a call will be made to unseal
 // a sector with the given params and should return the given data
-func (trpn *TestRetrievalProviderNode) ExpectUnseal(sectorID uint64, offset uint64, length uint64, data []byte) {
+func (trpn *TestRetrievalProviderNode) ExpectUnseal(sectorID abi.SectorNumber, offset, length abi.UnpaddedPieceSize, data []byte) {
 	trpn.expectations[sectorKey{sectorID, offset, length}] = struct{}{}
 	trpn.StubUnseal(sectorID, offset, length, data)
 }
 
 // UnsealSector simulates unsealing a sector by returning a stubbed response
 // or erroring
-func (trpn *TestRetrievalProviderNode) UnsealSector(ctx context.Context, sectorID uint64, offset uint64, length uint64) (io.ReadCloser, error) {
+func (trpn *TestRetrievalProviderNode) UnsealSector(ctx context.Context, sectorID abi.SectorNumber, offset, length abi.UnpaddedPieceSize) (io.ReadCloser, error) {
 	trpn.received[sectorKey{sectorID, offset, length}] = struct{}{}
 	data, ok := trpn.sectorStubs[sectorKey{sectorID, offset, length}]
 	if !ok {
@@ -115,13 +117,14 @@ func (trpn *TestRetrievalProviderNode) SavePaymentVoucher(
 	return abi.TokenAmount{}, errors.New("SavePaymentVoucher failed")
 }
 
-// GetMinerWorker translates an address
+// GetMinerWorkerAddress translates an address
 func (trpn *TestRetrievalProviderNode) GetMinerWorkerAddress(ctx context.Context, addr address.Address, tok shared.TipSetToken) (address.Address, error) {
 	return addr, nil
 }
 
+// GetChainHead returns a mock value for the chain head
 func (trpn *TestRetrievalProviderNode) GetChainHead(ctx context.Context) (shared.TipSetToken, abi.ChainEpoch, error) {
-	return []byte{42}, 0, nil
+	return []byte{42}, 0, trpn.ChainHeadError
 }
 
 // --- Non-interface Functions

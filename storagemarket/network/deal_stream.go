@@ -3,10 +3,11 @@ package network
 import (
 	"bufio"
 
-	cborutil "github.com/filecoin-project/go-cbor-util"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/mux"
 	"github.com/libp2p/go-libp2p-core/peer"
+
+	cborutil "github.com/filecoin-project/go-cbor-util"
 )
 
 // TagPriority is the priority for deal streams -- they should generally be preserved above all else
@@ -35,16 +36,20 @@ func (d *dealStream) WriteDealProposal(dp Proposal) error {
 	return cborutil.WriteCborRPC(d.rw, &dp)
 }
 
-func (d *dealStream) ReadDealResponse() (SignedResponse, error) {
+func (d *dealStream) ReadDealResponse() (SignedResponse, []byte, error) {
 	var dr SignedResponse
 
 	if err := dr.UnmarshalCBOR(d.buffered); err != nil {
-		return SignedResponseUndefined, err
+		return SignedResponseUndefined, nil, err
 	}
-	return dr, nil
+	origBytes, err := cborutil.Dump(&dr.Response)
+	if err != nil {
+		return SignedResponseUndefined, nil, err
+	}
+	return dr, origBytes, nil
 }
 
-func (d *dealStream) WriteDealResponse(dr SignedResponse) error {
+func (d *dealStream) WriteDealResponse(dr SignedResponse, _ ResigningFunc) error {
 	return cborutil.WriteCborRPC(d.rw, &dr)
 }
 
@@ -54,12 +59,4 @@ func (d *dealStream) Close() error {
 
 func (d *dealStream) RemotePeer() peer.ID {
 	return d.p
-}
-
-func (d *dealStream) TagProtectedConnection(identifier string) {
-	d.host.ConnManager().TagPeer(d.p, identifier, TagPriority)
-}
-
-func (d *dealStream) UntagProtectedConnection(identifier string) {
-	d.host.ConnManager().UntagPeer(d.p, identifier)
 }

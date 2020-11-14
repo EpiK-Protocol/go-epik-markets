@@ -3,22 +3,23 @@ package network
 import (
 	"bufio"
 
-	cborutil "github.com/filecoin-project/go-cbor-util"
 	"github.com/libp2p/go-libp2p-core/mux"
 	"github.com/libp2p/go-libp2p-core/peer"
+
+	cborutil "github.com/filecoin-project/go-cbor-util"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 )
 
-type QueryStream struct {
+type queryStream struct {
 	p        peer.ID
 	rw       mux.MuxedStream
 	buffered *bufio.Reader
 }
 
-var _ RetrievalQueryStream = (*QueryStream)(nil)
+var _ RetrievalQueryStream = (*queryStream)(nil)
 
-func (qs *QueryStream) ReadQuery() (retrievalmarket.Query, error) {
+func (qs *queryStream) ReadQuery() (retrievalmarket.Query, error) {
 	var q retrievalmarket.Query
 
 	if err := q.UnmarshalCBOR(qs.buffered); err != nil {
@@ -30,11 +31,11 @@ func (qs *QueryStream) ReadQuery() (retrievalmarket.Query, error) {
 	return q, nil
 }
 
-func (qs *QueryStream) WriteQuery(q retrievalmarket.Query) error {
+func (qs *queryStream) WriteQuery(q retrievalmarket.Query) error {
 	return cborutil.WriteCborRPC(qs.rw, &q)
 }
 
-func (qs *QueryStream) ReadQueryResponse() (retrievalmarket.QueryResponse, error) {
+func (qs *queryStream) ReadQueryResponse() (retrievalmarket.QueryResponse, error) {
 	var resp retrievalmarket.QueryResponse
 
 	if err := resp.UnmarshalCBOR(qs.buffered); err != nil {
@@ -45,10 +46,10 @@ func (qs *QueryStream) ReadQueryResponse() (retrievalmarket.QueryResponse, error
 	return resp, nil
 }
 
-func (qs *QueryStream) WriteQueryResponse(qr retrievalmarket.QueryResponse) error {
+func (qs *queryStream) WriteQueryResponse(qr retrievalmarket.QueryResponse) error {
 	return cborutil.WriteCborRPC(qs.rw, &qr)
 }
 
-func (qs *QueryStream) Close() error {
+func (qs *queryStream) Close() error {
 	return qs.rw.Close()
 }

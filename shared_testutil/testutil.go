@@ -2,17 +2,22 @@ package shared_testutil
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
-	cborutil "github.com/filecoin-project/go-cbor-util"
-	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	"github.com/jbenet/go-random"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	cborutil "github.com/filecoin-project/go-cbor-util"
+	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
+	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
 
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 )
@@ -58,7 +63,7 @@ func GeneratePeers(n int) []peer.ID {
 	peerIds := make([]peer.ID, 0, n)
 	for i := 0; i < n; i++ {
 		peerSeq++
-		p := peer.ID(peerSeq)
+		p := peer.ID(fmt.Sprint(peerSeq))
 		peerIds = append(peerIds, p)
 	}
 	return peerIds
@@ -105,4 +110,16 @@ func AssertDealState(t *testing.T, expected storagemarket.StorageDealStatus, act
 		storagemarket.DealStates[expected], expected,
 		storagemarket.DealStates[actual], actual,
 	)
+}
+
+func GenerateCid(t *testing.T, o interface{}) cid.Cid {
+	node, err := cborutil.AsIpld(o)
+	assert.NoError(t, err)
+	return node.Cid()
+}
+
+func DatastoreAtVersion(t *testing.T, ds datastore.Batching, version versioning.VersionKey) datastore.Batching {
+	err := ds.Put(datastore.NewKey("/versions/current"), []byte(version))
+	require.NoError(t, err)
+	return namespace.Wrap(ds, datastore.NewKey(fmt.Sprintf("/%s", version)))
 }

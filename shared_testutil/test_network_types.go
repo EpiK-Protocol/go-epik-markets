@@ -6,8 +6,12 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p-core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
+	cborutil "github.com/filecoin-project/go-cbor-util"
+
+	"github.com/filecoin-project/go-fil-markets/discovery"
 	rm "github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	rmnet "github.com/filecoin-project/go-fil-markets/retrievalmarket/network"
 	smnet "github.com/filecoin-project/go-fil-markets/storagemarket/network"
@@ -70,22 +74,22 @@ func NewTestRetrievalQueryStream(params TestQueryStreamParams) rmnet.RetrievalQu
 	return &stream
 }
 
-// ReadQuery calls the mocked query reader.
+// ReadDealStatusRequest calls the mocked query reader.
 func (trqs *TestRetrievalQueryStream) ReadQuery() (rm.Query, error) {
 	return trqs.reader()
 }
 
-// WriteQuery calls the mocked query writer.
+// WriteDealStatusRequest calls the mocked query writer.
 func (trqs *TestRetrievalQueryStream) WriteQuery(newQuery rm.Query) error {
 	return trqs.writer(newQuery)
 }
 
-// ReadQueryResponse calls the mocked query response reader.
+// ReadDealStatusResponse calls the mocked query response reader.
 func (trqs *TestRetrievalQueryStream) ReadQueryResponse() (rm.QueryResponse, error) {
 	return trqs.respReader()
 }
 
-// WriteQueryResponse calls the mocked query response writer.
+// WriteDealStatusResponse calls the mocked query response writer.
 func (trqs *TestRetrievalQueryStream) WriteQueryResponse(newResp rm.QueryResponse) error {
 	return trqs.respWriter(newResp)
 }
@@ -135,93 +139,19 @@ type TestDealStreamParams struct {
 	PaymentWriter  DealPaymentWriter
 }
 
-// NewTestRetrievalDealStream returns a new TestRetrievalDealStream with the
-// behavior specified by the paramaters, or default behaviors if not specified.
-func NewTestRetrievalDealStream(params TestDealStreamParams) rmnet.RetrievalDealStream {
-	stream := TestRetrievalDealStream{
-		p:              params.PeerID,
-		proposalReader: TrivialDealProposalReader,
-		proposalWriter: TrivialDealProposalWriter,
-		responseReader: TrivialDealResponseReader,
-		responseWriter: TrivialDealResponseWriter,
-		paymentReader:  TrivialDealPaymentReader,
-		paymentWriter:  TrivialDealPaymentWriter,
-	}
-	if params.ProposalReader != nil {
-		stream.proposalReader = params.ProposalReader
-	}
-	if params.ProposalWriter != nil {
-		stream.proposalWriter = params.ProposalWriter
-	}
-	if params.ResponseReader != nil {
-		stream.responseReader = params.ResponseReader
-	}
-	if params.ResponseWriter != nil {
-		stream.responseWriter = params.ResponseWriter
-	}
-	if params.PaymentReader != nil {
-		stream.paymentReader = params.PaymentReader
-	}
-	if params.PaymentWriter != nil {
-		stream.paymentWriter = params.PaymentWriter
-	}
-	return &stream
-}
-
-// ReadDealProposal calls the mocked deal proposal reader function.
-func (trds *TestRetrievalDealStream) ReadDealProposal() (rm.DealProposal, error) {
-	return trds.proposalReader()
-}
-
-// WriteDealProposal calls the mocked deal proposal writer function.
-func (trds *TestRetrievalDealStream) WriteDealProposal(dealProposal rm.DealProposal) error {
-	return trds.proposalWriter(dealProposal)
-}
-
-// ReadDealResponse calls the mocked deal response reader function.
-func (trds *TestRetrievalDealStream) ReadDealResponse() (rm.DealResponse, error) {
-	return trds.responseReader()
-}
-
-// WriteDealResponse calls the mocked deal response writer function.
-func (trds *TestRetrievalDealStream) WriteDealResponse(dealResponse rm.DealResponse) error {
-	return trds.responseWriter(dealResponse)
-}
-
-// ReadDealPayment calls the mocked deal payment reader function.
-func (trds *TestRetrievalDealStream) ReadDealPayment() (rm.DealPayment, error) {
-	return trds.paymentReader()
-}
-
-// WriteDealPayment calls the mocked deal payment writer function.
-func (trds *TestRetrievalDealStream) WriteDealPayment(dealPayment rm.DealPayment) error {
-	return trds.paymentWriter(dealPayment)
-}
-
-// Receiver returns the other peer
-func (trds TestRetrievalDealStream) Receiver() peer.ID { return trds.p }
-
-// Close closes the stream (does nothing for mocked stream)
-func (trds TestRetrievalDealStream) Close() error { return nil }
-
 // QueryStreamBuilder is a function that builds retrieval query streams.
 type QueryStreamBuilder func(peer.ID) (rmnet.RetrievalQueryStream, error)
-
-// DealStreamBuilder if a function that builds retrieval deal streams
-type DealStreamBuilder func(peer.ID) (rmnet.RetrievalDealStream, error)
 
 // TestRetrievalMarketNetwork is a test network that has stubbed behavior
 // for testing the retrieval market implementation
 type TestRetrievalMarketNetwork struct {
 	receiver  rmnet.RetrievalReceiver
-	dsbuilder DealStreamBuilder
 	qsbuilder QueryStreamBuilder
 }
 
 // TestNetworkParams are parameters for setting up a test network. All
 // parameters other than the receiver are optional
 type TestNetworkParams struct {
-	DealStreamBuilder  DealStreamBuilder
 	QueryStreamBuilder QueryStreamBuilder
 	Receiver           rmnet.RetrievalReceiver
 }
@@ -230,29 +160,20 @@ type TestNetworkParams struct {
 // behavior specified by the paramaters, or default behaviors if not specified.
 func NewTestRetrievalMarketNetwork(params TestNetworkParams) *TestRetrievalMarketNetwork {
 	trmn := TestRetrievalMarketNetwork{
-		dsbuilder: TrivialNewDealStream,
 		qsbuilder: TrivialNewQueryStream,
 		receiver:  params.Receiver,
 	}
-	if params.DealStreamBuilder != nil {
-		trmn.dsbuilder = params.DealStreamBuilder
-	}
+
 	if params.QueryStreamBuilder != nil {
 		trmn.qsbuilder = params.QueryStreamBuilder
 	}
 	return &trmn
 }
 
-// NewQueryStream returns a query stream.
+// NewDealStatusStream returns a query stream.
 // Note this always returns the same stream.  This is fine for testing for now.
 func (trmn *TestRetrievalMarketNetwork) NewQueryStream(id peer.ID) (rmnet.RetrievalQueryStream, error) {
 	return trmn.qsbuilder(id)
-}
-
-// NewDealStream returns a deal stream
-// Note this always returns the same stream.  This is fine for testing for now.
-func (trmn *TestRetrievalMarketNetwork) NewDealStream(id peer.ID) (rmnet.RetrievalDealStream, error) {
-	return trmn.dsbuilder(id)
 }
 
 // SetDelegate sets the market receiver
@@ -266,15 +187,19 @@ func (trmn *TestRetrievalMarketNetwork) ReceiveQueryStream(qs rmnet.RetrievalQue
 	trmn.receiver.HandleQueryStream(qs)
 }
 
-// ReceiveDealStream simulates receiving a deal stream
-func (trmn *TestRetrievalMarketNetwork) ReceiveDealStream(ds rmnet.RetrievalDealStream) {
-	trmn.receiver.HandleDealStream(ds)
-}
-
 // StopHandlingRequests sets receiver to nil
 func (trmn *TestRetrievalMarketNetwork) StopHandlingRequests() error {
 	trmn.receiver = nil
 	return nil
+}
+
+// ID returns the peer id of this host (empty peer ID in test)
+func (trmn *TestRetrievalMarketNetwork) ID() peer.ID {
+	return peer.ID("")
+}
+
+// AddAddrs does nothing in test
+func (trmn *TestRetrievalMarketNetwork) AddAddrs(peer.ID, []ma.Multiaddr) {
 }
 
 var _ rmnet.RetrievalMarketNetwork = &TestRetrievalMarketNetwork{}
@@ -284,11 +209,6 @@ var _ rmnet.RetrievalMarketNetwork = &TestRetrievalMarketNetwork{}
 // FailNewQueryStream always fails
 func FailNewQueryStream(peer.ID) (rmnet.RetrievalQueryStream, error) {
 	return nil, errors.New("new query stream failed")
-}
-
-// FailNewDealStream always fails
-func FailNewDealStream(peer.ID) (rmnet.RetrievalDealStream, error) {
-	return nil, errors.New("new deal stream failed")
 }
 
 // FailQueryReader always fails
@@ -354,11 +274,6 @@ func ExpectPeerOnQueryStreamBuilder(t *testing.T, expectedPeer peer.ID, qb Query
 	}
 }
 
-// TrivialNewDealStream succeeds trivially, returning an empty deal stream.
-func TrivialNewDealStream(p peer.ID) (rmnet.RetrievalDealStream, error) {
-	return NewTestRetrievalDealStream(TestDealStreamParams{PeerID: p}), nil
-}
-
 // TrivialQueryReader succeeds trivially, returning an empty query.
 func TrivialQueryReader() (rm.Query, error) {
 	return rm.Query{}, nil
@@ -376,36 +291,6 @@ func TrivialQueryWriter(rm.Query) error {
 
 // TrivialQueryResponseWriter succeeds trivially, returning no error.
 func TrivialQueryResponseWriter(rm.QueryResponse) error {
-	return nil
-}
-
-// TrivialDealProposalReader succeeds trivially, returning an empty proposal.
-func TrivialDealProposalReader() (rm.DealProposal, error) {
-	return rm.DealProposal{}, nil
-}
-
-// TrivialDealResponseReader succeeds trivially, returning an empty deal response.
-func TrivialDealResponseReader() (rm.DealResponse, error) {
-	return rm.DealResponse{}, nil
-}
-
-// TrivialDealPaymentReader succeeds trivially, returning an empty deal payment.
-func TrivialDealPaymentReader() (rm.DealPayment, error) {
-	return rm.DealPayment{}, nil
-}
-
-// TrivialDealProposalWriter succeeds trivially, returning no error.
-func TrivialDealProposalWriter(rm.DealProposal) error {
-	return nil
-}
-
-// TrivialDealResponseWriter succeeds trivially, returning no error.
-func TrivialDealResponseWriter(rm.DealResponse) error {
-	return nil
-}
-
-// TrivialDealPaymentWriter succeeds trivially, returning no error.
-func TrivialDealPaymentWriter(rm.DealPayment) error {
 	return nil
 }
 
@@ -508,10 +393,10 @@ func StubbedDealPaymentReader(payment rm.DealPayment) DealPaymentReader {
 type StorageDealProposalReader func() (smnet.Proposal, error)
 
 // StorageDealResponseReader is a function to mock reading deal responses.
-type StorageDealResponseReader func() (smnet.SignedResponse, error)
+type StorageDealResponseReader func() (smnet.SignedResponse, []byte, error)
 
 // StorageDealResponseWriter is a function to mock writing deal responses.
-type StorageDealResponseWriter func(smnet.SignedResponse) error
+type StorageDealResponseWriter func(smnet.SignedResponse, smnet.ResigningFunc) error
 
 // StorageDealProposalWriter is a function to mock writing deal proposals.
 type StorageDealProposalWriter func(smnet.Proposal) error
@@ -524,7 +409,9 @@ type TestStorageDealStream struct {
 	proposalWriter StorageDealProposalWriter
 	responseReader StorageDealResponseReader
 	responseWriter StorageDealResponseWriter
-	tags           map[string]struct{}
+
+	CloseCount int
+	CloseError error
 }
 
 // TestStorageDealStreamParams are parameters used to setup a TestStorageDealStream.
@@ -537,6 +424,8 @@ type TestStorageDealStreamParams struct {
 	ResponseWriter StorageDealResponseWriter
 }
 
+var _ smnet.StorageDealStream = &TestStorageDealStream{}
+
 // NewTestStorageDealStream returns a new TestStorageDealStream with the
 // behavior specified by the paramaters, or default behaviors if not specified.
 func NewTestStorageDealStream(params TestStorageDealStreamParams) *TestStorageDealStream {
@@ -546,7 +435,6 @@ func NewTestStorageDealStream(params TestStorageDealStreamParams) *TestStorageDe
 		proposalWriter: TrivialStorageDealProposalWriter,
 		responseReader: TrivialStorageDealResponseReader,
 		responseWriter: TrivialStorageDealResponseWriter,
-		tags:           make(map[string]struct{}),
 	}
 	if params.ProposalReader != nil {
 		stream.proposalReader = params.ProposalReader
@@ -574,36 +462,22 @@ func (tsds *TestStorageDealStream) WriteDealProposal(dealProposal smnet.Proposal
 }
 
 // ReadDealResponse calls the mocked deal response reader function.
-func (tsds *TestStorageDealStream) ReadDealResponse() (smnet.SignedResponse, error) {
+func (tsds *TestStorageDealStream) ReadDealResponse() (smnet.SignedResponse, []byte, error) {
 	return tsds.responseReader()
 }
 
 // WriteDealResponse calls the mocked deal response writer function.
-func (tsds *TestStorageDealStream) WriteDealResponse(dealResponse smnet.SignedResponse) error {
-	return tsds.responseWriter(dealResponse)
+func (tsds *TestStorageDealStream) WriteDealResponse(dealResponse smnet.SignedResponse, resigningFunc smnet.ResigningFunc) error {
+	return tsds.responseWriter(dealResponse, resigningFunc)
 }
 
 // RemotePeer returns the other peer
 func (tsds TestStorageDealStream) RemotePeer() peer.ID { return tsds.p }
 
 // Close closes the stream (does nothing for mocked stream)
-func (tsds TestStorageDealStream) Close() error { return nil }
-
-// TagProtectedConnection preserves this connection as higher priority than others
-func (tsds TestStorageDealStream) TagProtectedConnection(identifier string) {
-	tsds.tags[identifier] = struct{}{}
-}
-
-// UntagProtectedConnection removes the given tag on this connection, increasing
-// the likelyhood it will be cleaned up
-func (tsds TestStorageDealStream) UntagProtectedConnection(identifier string) {
-	delete(tsds.tags, identifier)
-}
-
-// AssertConnectionTagged verifies a connection was tagged with the given identifier
-func (tsds TestStorageDealStream) AssertConnectionTagged(t *testing.T, identifier string) {
-	_, ok := tsds.tags[identifier]
-	require.True(t, ok)
+func (tsds *TestStorageDealStream) Close() error {
+	tsds.CloseCount += 1
+	return tsds.CloseError
 }
 
 // TrivialStorageDealProposalReader succeeds trivially, returning an empty proposal.
@@ -612,8 +486,8 @@ func TrivialStorageDealProposalReader() (smnet.Proposal, error) {
 }
 
 // TrivialStorageDealResponseReader succeeds trivially, returning an empty deal response.
-func TrivialStorageDealResponseReader() (smnet.SignedResponse, error) {
-	return smnet.SignedResponse{}, nil
+func TrivialStorageDealResponseReader() (smnet.SignedResponse, []byte, error) {
+	return MakeTestStorageNetworkSignedResponse(), nil, nil
 }
 
 // TrivialStorageDealProposalWriter succeeds trivially, returning no error.
@@ -622,7 +496,7 @@ func TrivialStorageDealProposalWriter(smnet.Proposal) error {
 }
 
 // TrivialStorageDealResponseWriter succeeds trivially, returning no error.
-func TrivialStorageDealResponseWriter(smnet.SignedResponse) error {
+func TrivialStorageDealResponseWriter(smnet.SignedResponse, smnet.ResigningFunc) error {
 	return nil
 }
 
@@ -635,8 +509,9 @@ func StubbedStorageProposalReader(proposal smnet.Proposal) StorageDealProposalRe
 
 // StubbedStorageResponseReader returns the given deal response when called
 func StubbedStorageResponseReader(response smnet.SignedResponse) StorageDealResponseReader {
-	return func() (smnet.SignedResponse, error) {
-		return response, nil
+	return func() (smnet.SignedResponse, []byte, error) {
+		origBytes, _ := cborutil.Dump(&response.Response)
+		return response, origBytes, nil
 	}
 }
 
@@ -656,8 +531,8 @@ func FailStorageResponseWriter(smnet.SignedResponse) error {
 }
 
 // FailStorageResponseReader always fails
-func FailStorageResponseReader() (smnet.SignedResponse, error) {
-	return smnet.SignedResponseUndefined, errors.New("read response failed")
+func FailStorageResponseReader() (smnet.SignedResponse, []byte, error) {
+	return smnet.SignedResponseUndefined, nil, errors.New("read response failed")
 }
 
 // TestPeerResolver provides a fake retrievalmarket PeerResolver
@@ -670,4 +545,23 @@ func (tpr TestPeerResolver) GetPeers(cid.Cid) ([]rm.RetrievalPeer, error) {
 	return tpr.Peers, tpr.ResolverError
 }
 
-var _ rm.PeerResolver = &TestPeerResolver{}
+var _ discovery.PeerResolver = &TestPeerResolver{}
+
+type TestPeerTagger struct {
+	TagCalls   []peer.ID
+	UntagCalls []peer.ID
+}
+
+func NewTestPeerTagger() *TestPeerTagger {
+	return &TestPeerTagger{}
+}
+
+func (pt *TestPeerTagger) TagPeer(id peer.ID, _ string) {
+	pt.TagCalls = append(pt.TagCalls, id)
+}
+
+func (pt *TestPeerTagger) UntagPeer(id peer.ID, _ string) {
+	pt.UntagCalls = append(pt.UntagCalls, id)
+}
+
+var _ smnet.PeerTagger = &TestPeerTagger{}

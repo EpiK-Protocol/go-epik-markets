@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/filecoin-project/specs-actors/actors/abi"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/shared"
@@ -18,10 +20,11 @@ func TestParamsMarshalUnmarshal(t *testing.T) {
 	pieceCid := tut.GenerateCids(1)[0]
 
 	allSelector := shared.AllSelector()
-	params := retrievalmarket.NewParamsV1(abi.NewTokenAmount(123), 456, 789, allSelector, &pieceCid)
+	params, err := retrievalmarket.NewParamsV1(abi.NewTokenAmount(123), 456, 789, allSelector, &pieceCid, big.Zero())
+	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err := params.MarshalCBOR(buf)
+	err = params.MarshalCBOR(buf)
 	assert.NoError(t, err)
 
 	unmarshalled := &retrievalmarket.Params{}
@@ -30,7 +33,7 @@ func TestParamsMarshalUnmarshal(t *testing.T) {
 
 	assert.Equal(t, params, *unmarshalled)
 
-	nb := basicnode.Style.Any.NewBuilder()
+	nb := basicnode.Prototype.Any.NewBuilder()
 	err = dagcbor.Decoder(nb, bytes.NewBuffer(unmarshalled.Selector.Raw))
 	assert.NoError(t, err)
 	sel := nb.Build()

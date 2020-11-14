@@ -5,13 +5,14 @@ The node implementation must provide access to chain operations, and persistent
 data storage.
 
 ## Table of Contents
-* [Background reading](#Background_reading)
+* [Background reading](#background-reading)
 * [Installation](#Installation)
 * [Operation](#Operation)
 * [Implementation](#Implementation)
-    * [StorageFunds](#StorageFunds)
+    * [StorageCommon](#StorageCommon)
     * [StorageClientNode](#StorageClientNode)
     * [StorageProviderNode](#StorageProviderNode)
+* [Technical Documentation](#technical-documentation)
 
 ## Background reading
 
@@ -29,7 +30,7 @@ go get github.com/filecoin-project/go-fil-markets/storagemarket
 ## Operation
 The `storagemarket` package provides high level APIs to execute data storage deals between a
 storage client and a storage provider (a.k.a. storage miner) on the Filecoin network.
-The Filecoin node must implement the [`StorageFunds`](#StorageFunds), [`StorageProviderNode`](#StorageProviderNode), and
+The Filecoin node must implement the [`StorageCommon`](#StorageCommon), [`StorageProviderNode`](#StorageProviderNode), and
 [`StorageClientNode`](#StorageClientNode) interfaces in order to construct and use the module.
 
 Deals are expected to survive a node restart; deals and related information are
@@ -52,19 +53,22 @@ function in the appropriate place.
 1. Expose desired `storagemarket` functionality to whatever internal modules desired, such as
  command line interface, JSON RPC, or HTTP API.
 
-Implement the [`StorageFunds`](#StorageFunds), [`StorageProviderNode`](#StorageProviderNode), and
+Implement the [`StorageCommon`](#StorageCommon), [`StorageProviderNode`](#StorageProviderNode), and
               [`StorageClientNode`](#StorageClientNode) interfaces in 
               [storagemarket/types.go](./types.go), described below:
 
-### StorageFunds
-`StorageFunds` is an interface common to both `StorageProviderNode` and `StorageClientNode`. Its
+### StorageCommon
+`StorageCommon` is an interface common to both `StorageProviderNode` and `StorageClientNode`. Its
  functions are:
 * [`GetChainHead`](#GetChainHead)
 * [`AddFunds`](#AddFunds)
-* [`EnsureFunds`](#EnsureFunds)
+* [`ReserveFunds`](#ReserveFunds)
+* [`ReleaseFunds`](#ReleaseFunds)
 * [`GetBalance`](#GetBalance)
 * [`VerifySignature`](#VerifySignature)
 * [`WaitForMessage`](#WaitForMessage)
+* [`SignBytes`](#SignBytes)
+* [`GetMinerWorkerAddress`](#GetMinerWorkerAddress)
 
 #### AddFunds
 ```go
@@ -73,14 +77,21 @@ func AddFunds(ctx context.Context, addr address.Address, amount abi.TokenAmount)
 
 Send `amount` to `addr` by posting a message on chain. Return the message CID.
 
-#### EnsureFunds
+#### ReserveFunds
 ```go
-func EnsureFunds(ctx context.Context, addr, wallet address.Address, amount abi.TokenAmount, 
-            tok shared.TipSetToken) (cid.Cid, error)
+func ReserveFunds(ctx context.Context, addr, wallet address.Address, amount abi.TokenAmount) (cid.Cid, error)
 ```
  
-Make sure `addr` has `amount` funds and if not, `wallet` should send any needed balance to
-  `addr` by posting a message on chain. Returns the message CID.
+Add `amount` to the total reserved funds for `addr`. If total available balance for `addr` in StorageMarketActor is not greater than total reserved, `wallet` should send any needed balance to `addr` by posting a message on chain. Returns the message CID.
+
+#### ReserveFunds
+```go
+func ReleaseFunds(ctx context.Context, addr address.Address, amount abi.TokenAmount) (cid.Cid, error)
+```
+ 
+Release `amount` funds from reserved total for `addr`. No withdrawal is performed for `addr` in the storage market actor but the funds released become
+available for future withdrawal
+(if new total reserved < total available in SMA) 
 
 #### GetBalance
 ```go
@@ -103,17 +114,31 @@ func WaitForMessage(ctx context.Context, mcid cid.Cid,
 ```
 Wait for message CID `mcid` to appear on chain, and call `onCompletion` when it does so.
 
+#### SignBytes
+```go
+func SignBytes(ctx context.Context, signer address.Address, b []byte) (*crypto.Signature, error)
+```
+
+Cryptographically sign bytes `b` using the private key referenced by address `signer`.
+
+#### GetMinerWorkerAddress
+```go
+func GetMinerWorkerAddress(ctx context.Context, addr address.Address, tok shared.TipSetToken,
+                     ) (address.Address, error)
+```
+
+Get the miner worker address for the given miner owner, as of `tok`.
+
 ---
 ### StorageProviderNode
 `StorageProviderNode` is the interface for dependencies for a `StorageProvider`. It contains:
 
-* [`StorageFunds`](#StorageFunds) interface
+* [`StorageCommon`](#StorageCommon) interface
 * [`PublishDeals`](#PublishDeals)
 * [`ListProviderDeals`](#ListProviderDeals)
-* [`GetMinerWorkerAddress`](#GetMinerWorkerAddress)
-* [`SignBytes`](#SignBytes)
 * [`OnDealSectorCommitted`](#OnDealSectorCommitted)
 * [`LocatePieceForDealWithinSector`](#LocatePieceForDealWithinSector)
+* [`OnDealExpiredOrSlashed`](#OnDealExpiredOrSlashed)
 
 #### GetChainHead
 ```go
@@ -127,16 +152,6 @@ func PublishDeals(ctx context.Context, deal MinerDeal) (cid.Cid, error)
 ```
 Post the deal to chain, returning the posted message CID.
 
-#### ListProviderDeals
-```go
-func ListProviderDeals(ctx context.Context, addr address.Address, tok shared.TipSetToken,
-                  ) ([]StorageDeal, error)
-```
-
-List all storage deals for storage provider `addr`, as of `tok`. Return a slice of `StorageDeal`.
-`StorageDeal` is a local combination of a storage deal proposal and a current deal 
-state. See [storagemarket/types.go](./types.go)
-
 #### OnDealComplete
 ```go
 func OnDealComplete(ctx context.Context, deal MinerDeal, pieceSize abi.UnpaddedPieceSize, 
@@ -145,21 +160,6 @@ func OnDealComplete(ctx context.Context, deal MinerDeal, pieceSize abi.UnpaddedP
 The function to be called when MinerDeal `deal` has reached the `storagemarket.StorageDealCompleted` state. 
 A `MinerDeal` contains more information than a StorageDeal, including paths, addresses, and CIDs
 pertinent to the deal. See [storagemarket/types.go](./types.go)
-
-#### GetMinerWorkerAddress
-```go
-func GetMinerWorkerAddress(ctx context.Context, addr address.Address, tok shared.TipSetToken,
-                     ) (address.Address, error)
-```
-
-Get the miner worker address for the given miner owner, as of `tok`.
-
-#### SignBytes
-```go
-func SignBytes(ctx context.Context, signer address.Address, b []byte) (*crypto.Signature, error)
-```
-
-Cryptographically sign bytes `b` using the private key referenced by address `signer`.
 
 #### OnDealSectorCommitted
 ```go
@@ -178,10 +178,21 @@ func LocatePieceForDealWithinSector(ctx context.Context, dealID abi.DealID, tok 
 Find the piece associated with `dealID` as of `tok` and return the sector id, plus the offset and
  length of the data within the sector.
  
+#### OnDealExpiredOrSlashed
+```go
+func OnDealExpiredOrSlashed(
+    ctx context.Context,
+    dealID abi.DealID,
+    onDealExpired DealExpiredCallback,
+    onDealSlashed DealSlashedCallback) error
+```
+
+Register callbacks to be called when a deal expires or is slashed.
+
 ---
 ### StorageClientNode
 `StorageClientNode` implements dependencies for a StorageClient. It contains:
-* [`StorageFunds`](#StorageFunds) interface
+* [`StorageCommon`](#StorageCommon) interface
 * [`GetChainHead`](#GetChainHead)
 * [`ListClientDeals`](#ListClientDeals)
 * [`ListStorageProviders`](#ListStorageProviders)
@@ -189,23 +200,16 @@ Find the piece associated with `dealID` as of `tok` and return the sector id, pl
 * [`SignProposal`](#SignProposal)
 * [`GetDefaultWalletAddress`](#GetDefaultWalletAddress)
 * [`OnDealSectorCommitted`](#OnDealSectorCommitted)
-* [`ValidateAskSignature`](#ValidateAskSignature)
+* [`OnDealExpiredOrSlashed`](#OnDealExpiredOrSlashed)
 
-#### StorageFunds
-`StorageClientNode` implements `StorageFunds`, described above.
+#### StorageCommon
+`StorageClientNode` implements `StorageCommon`, described above.
 
 #### GetChainHead
 ```go
 func GetChainHead(ctx context.Context) (shared.TipSetToken, abi.ChainEpoch, error)
 ```
 Get the current chain head. Return its TipSetToken and its abi.ChainEpoch.
-
-#### ListClientDeals
-```go
-func ListClientDeals(ctx context.Context, addr address.Address, tok shared.TipSetToken,
-                 ) ([]StorageDeal, error)
-```
-List all deals associated with storage client `addr`, as of `tok`. Return a slice of `StorageDeal`.
 
 #### ListStorageProviders
 ```go
@@ -245,13 +249,16 @@ func OnDealSectorCommitted(ctx context.Context, provider address.Address, dealID
 
 Register a callback to be called once the Deal's sector(s) are committed.
 
-#### ValidateAskSignature
+#### OnDealExpiredOrSlashed
 ```go
-func ValidateAskSignature(ctx context.Context, ask *SignedStorageAsk, tok shared.TipSetToken,
-                     ) (bool, error)
+func OnDealExpiredOrSlashed(
+    ctx context.Context,
+    dealID abi.DealID,
+    onDealExpired DealExpiredCallback,
+    onDealSlashed DealSlashedCallback) error
 ```
-Verify the signature in `ask`, returning true (valid) or false (invalid).
 
+Register callbacks to be called when a deal expires or is slashed.
 
 #### GetMinerInfo
 ```go
@@ -345,7 +352,7 @@ See this repo's [piecestore module](../piecestore).
   that was written for your node.
 * `minerAddress address.Address` is the miner owner address.
 * `rt abi.RegisteredProof` is an int64 indicating the type of proof to use when generating a piece commitment (CommP).
-    see [github.com/filecoin-project/specs-actors/actors/abi/sector.go](https://github.com/filecoin-project/specs-actors/blob/master/actors/abi/sector.go)
+    see [github.com/filecoin-project/go-state-types/abi/sector.go](https://github.com/filecoin-project/specs-actors/blob/master/actors/abi/sector.go)
     for the list and meaning of accepted values.
 * `storedAsk StoredAsk` is an interface for getting and adding storage Asks. It is implemented in storagemarket.
     To create a `StoredAsk`:
@@ -356,3 +363,16 @@ See this repo's [piecestore module](../piecestore).
     ```
 * `options ...StorageProviderOption` options is a variable length parameter to provide functions that change the
     StorageProvider default configuration. See [provider.go](./impl/provider.go) for the available options.
+
+## Technical Documentation
+
+* [GoDoc](https://godoc.org/github.com/filecoin-project/go-fil-markets/storagemarket) contains an architectural overview and robust API documentation
+
+* Storage Client FSM diagram:
+
+[![Diagram of StorageClientFSM](../docs/storageclient.mmd.png)](https://raw.githubusercontent.com/filecoin-project/go-fil-markets/master/docs/storageclient.mmd.svg)
+
+
+* Storage Provider FSM diagram:
+
+[![Diagram of StorageClientFSM](../docs/storageprovider.mmd.png)](https://raw.githubusercontent.com/filecoin-project/go-fil-markets/master/docs/storageprovider.mmd.svg)
