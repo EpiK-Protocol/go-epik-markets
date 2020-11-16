@@ -8,7 +8,7 @@ import (
 
 	storagemarket "github.com/filecoin-project/go-fil-markets/storagemarket"
 	crypto "github.com/filecoin-project/go-state-types/crypto"
-	market "github.com/filecoin-project/specs-actors/actors/builtin/market"
+	market "github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )

@@ -18,7 +18,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-statemachine/fsm"
-	"github.com/filecoin-project/specs-actors/actors/builtin/market"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	market2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 
 	"github.com/filecoin-project/go-fil-markets/filestore"
@@ -102,16 +102,17 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("deal duration out of bounds (min, max, provided): %d, %d, %d", minDuration, maxDuration, proposal.Duration()))
 	}
 
-	list, err := environment.Node().ListProviderDeals(ctx.Context(), deal.Proposal.Provider, tok)
-	if err != nil {
-		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("getting provider list: %w", err))
-	}
-	for _, sd := range list {
-		if sd.DealState.SectorStartEpoch > 0 && sd.PieceCID.Equals(deal.Proposal.PieceCID) {
-			return ctx.Trigger(storagemarket.ProviderEventDealRejected,
-				xerrors.Errorf("duplicat storage pieceCID: %s", deal.Proposal.PieceCID))
-		}
-	}
+	//TODO:larry
+	// list, err := environment.Node().ListProviderDeals(ctx.Context(), deal.Proposal.Provider, tok)
+	// if err != nil {
+	// 	return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("getting provider list: %w", err))
+	// }
+	// for _, sd := range list {
+	// 	if sd.DealState.SectorStartEpoch > 0 && sd.PieceCID.Equals(deal.Proposal.PieceCID) {
+	// 		return ctx.Trigger(storagemarket.ProviderEventDealRejected,
+	// 			xerrors.Errorf("duplicat storage pieceCID: %s", deal.Proposal.PieceCID))
+	// 	}
+	// }
 
 	pcMin, pcMax, err := environment.Node().DealProviderCollateralBounds(ctx.Context(), proposal.PieceSize, proposal.VerifiedDeal)
 	if err != nil {

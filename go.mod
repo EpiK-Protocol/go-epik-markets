@@ -53,6 +53,8 @@ require (
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 )
 
-replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
-replace github.com/filecoin-project/specs-actors/v2 v2.0.1 => ../go-epik-actors
-// replace github.com/filecoin-project/specs-actors => github.com/EpiK-Protocol/go-epik-actors testnet-compat
+replace github.com/filecoin-project/go-fil-markets => ./
+
+replace github.com/filecoin-project/filecoin-ffi => github.com/EpiK-Protocol/go-epik-ffi 9647d22c3d8eee349c52a953c8b683bbcbf81fd6
+// replace github.com/filecoin-project/specs-actors/v2 v2.0.1 => ../go-epik-actors
+replace github.com/filecoin-project/specs-actors => github.com/EpiK-Protocol/go-epik-actors 8a743b7712d287a3ff061b56c14bb2366b9a3334

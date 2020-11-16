@@ -17,7 +17,7 @@ import (
 
 	cborutil "github.com/filecoin-project/go-cbor-util"
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
-	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
 
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 )

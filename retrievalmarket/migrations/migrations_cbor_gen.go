@@ -9,7 +9,7 @@ import (
 	migrations "github.com/filecoin-project/go-fil-markets/piecestore/migrations"
 	retrievalmarket "github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	multistore "github.com/filecoin-project/go-multistore"
-	paych "github.com/filecoin-project/specs-actors/actors/builtin/paych"
+	paych "github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
