@@ -18,12 +18,24 @@ func NewFromLibp2pHost(h host.Host) RetrievalMarketNetwork {
 	return &libp2pRetrievalMarketNetwork{host: h}
 }
 
+type Reporter func(typ, direction string, value int)
+
+func WithStatsReporter(n RetrievalMarketNetwork, reporter Reporter) {
+	ln, ok := n.(*libp2pRetrievalMarketNetwork)
+	if !ok {
+		return
+	}
+	ln.reporter = reporter
+}
+
 // libp2pRetrievalMarketNetwork transforms the libp2p host interface, which sends and receives
 // NetMessage objects, into the graphsync network interface.
 type libp2pRetrievalMarketNetwork struct {
 	host host.Host
 	// inbound messages from the network are forwarded to the receiver
 	receiver RetrievalReceiver
+
+	reporter Reporter
 }
 
 func (impl *libp2pRetrievalMarketNetwork) NewQueryStream(id peer.ID) (RetrievalQueryStream, error) {
@@ -42,7 +54,7 @@ func (impl *libp2pRetrievalMarketNetwork) NewDealStream(id peer.ID) (RetrievalDe
 		return nil, err
 	}
 	buffered := bufio.NewReaderSize(s, 16)
-	return &DealStream{p: id, rw: s, buffered: buffered}, nil
+	return &DealStream{p: id, rw: s, buffered: buffered, reporter: impl.reporter}, nil
 }
 
 func (impl *libp2pRetrievalMarketNetwork) SetDelegate(r RetrievalReceiver) error {
@@ -79,6 +91,6 @@ func (impl *libp2pRetrievalMarketNetwork) handleNewDealStream(s network.Stream) 
 	}
 	remotePID := s.Conn().RemotePeer()
 	buffered := bufio.NewReaderSize(s, 16)
-	ds := &DealStream{remotePID, s, buffered}
+	ds := &DealStream{remotePID, s, buffered, impl.reporter}
 	impl.receiver.HandleDealStream(ds)
 }

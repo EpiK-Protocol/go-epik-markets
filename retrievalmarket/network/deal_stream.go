@@ -14,6 +14,7 @@ type DealStream struct {
 	p        peer.ID
 	rw       mux.MuxedStream
 	buffered *bufio.Reader
+	reporter Reporter
 }
 
 var _ RetrievalDealStream = (*DealStream)(nil)
@@ -21,7 +22,11 @@ var _ RetrievalDealStream = (*DealStream)(nil)
 func (d *DealStream) ReadDealProposal() (retrievalmarket.DealProposal, error) {
 	var ds retrievalmarket.DealProposal
 
-	if err := ds.UnmarshalCBOR(d.buffered); err != nil {
+	cr := NewCountReader(d.buffered)
+	if d.reporter != nil {
+		defer d.reporter("retrieval", "inbound", cr.Count())
+	}
+	if err := ds.UnmarshalCBOR(cr); err != nil {
 		log.Warn(err)
 		return retrievalmarket.DealProposalUndefined, err
 	}
@@ -29,33 +34,53 @@ func (d *DealStream) ReadDealProposal() (retrievalmarket.DealProposal, error) {
 }
 
 func (d *DealStream) WriteDealProposal(dp retrievalmarket.DealProposal) error {
-	return cborutil.WriteCborRPC(d.rw, &dp)
+	cw := NewCountWriter(d.rw)
+	if d.reporter != nil {
+		defer d.reporter("retrieval", "outbound", cw.Count())
+	}
+	return cborutil.WriteCborRPC(cw, &dp)
 }
 
 func (d *DealStream) ReadDealResponse() (retrievalmarket.DealResponse, error) {
 	var dr retrievalmarket.DealResponse
 
-	if err := dr.UnmarshalCBOR(d.buffered); err != nil {
+	cr := NewCountReader(d.buffered)
+	if d.reporter != nil {
+		defer d.reporter("retrieval", "inbound", cr.Count())
+	}
+	if err := dr.UnmarshalCBOR(cr); err != nil {
 		return retrievalmarket.DealResponseUndefined, err
 	}
 	return dr, nil
 }
 
 func (d *DealStream) WriteDealResponse(dr retrievalmarket.DealResponse) error {
-	return cborutil.WriteCborRPC(d.rw, &dr)
+	cw := NewCountWriter(d.rw)
+	if d.reporter != nil {
+		defer d.reporter("retrieval", "outbound", cw.Count())
+	}
+	return cborutil.WriteCborRPC(cw, &dr)
 }
 
 func (d *DealStream) ReadDealPayment() (retrievalmarket.DealPayment, error) {
 	var ds retrievalmarket.DealPayment
 
-	if err := ds.UnmarshalCBOR(d.rw); err != nil {
+	cr := NewCountReader(d.rw)
+	if d.reporter != nil {
+		defer d.reporter("retrieval", "inbound", cr.Count())
+	}
+	if err := ds.UnmarshalCBOR(cr); err != nil {
 		return retrievalmarket.DealPaymentUndefined, err
 	}
 	return ds, nil
 }
 
 func (d *DealStream) WriteDealPayment(dpy retrievalmarket.DealPayment) error {
-	return cborutil.WriteCborRPC(d.rw, &dpy)
+	cw := NewCountWriter(d.rw)
+	if d.reporter != nil {
+		defer d.reporter("retrieval", "outbound", cw.Count())
+	}
+	return cborutil.WriteCborRPC(cw, &dpy)
 }
 
 func (d *DealStream) Receiver() peer.ID {
