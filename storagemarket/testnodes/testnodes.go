@@ -356,9 +356,9 @@ func (n *FakeProviderNode) LocatePieceForDealWithinSector(ctx context.Context, d
 	return 0, 0, 0, n.LocatePieceForDealWithinSectorError
 }
 
-// GetDataCap gets the current data cap for addr
+/* // GetDataCap gets the current data cap for addr
 func (n *FakeProviderNode) GetDataCap(ctx context.Context, addr address.Address, tok shared.TipSetToken) (*verifreg.DataCap, error) {
 	return n.DataCap, n.GetDataCapErr
-}
+} */
 
 var _ storagemarket.StorageProviderNode = (*FakeProviderNode)(nil)

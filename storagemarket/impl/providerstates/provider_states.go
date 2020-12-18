@@ -160,7 +160,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("clientMarketBalance.Available too small: %d < %d", clientMarketBalance.Available, proposal.ClientBalanceRequirement()))
 	}
 
-	// Verified deal checks
+	/* // Verified deal checks
 	if proposal.VerifiedDeal {
 		dataCap, err := environment.Node().GetDataCap(ctx.Context(), proposal.Client, tok)
 		if err != nil {
@@ -173,7 +173,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		if dataCap.LessThan(pieceSize) {
 			return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("verified deal DataCap too small for proposed piece size"))
 		}
-	}
+	} */
 
 	return ctx.Trigger(storagemarket.ProviderEventDealDeciding)
 }
