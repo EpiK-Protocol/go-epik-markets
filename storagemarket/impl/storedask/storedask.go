@@ -24,11 +24,11 @@ import (
 
 var log = logging.Logger("storedask")
 
-// DefaultPrice is the default price for unverified deals (in attoFil / GiB / Epoch)
+/* // DefaultPrice is the default price for unverified deals (in attoFil / GiB / Epoch)
 var DefaultPrice = abi.NewTokenAmount(0)
 
 // DefaultVerifiedPrice is the default price for verified deals (in attoFil / GiB / Epoch)
-var DefaultVerifiedPrice = abi.NewTokenAmount(0)
+var DefaultVerifiedPrice = abi.NewTokenAmount(0) */
 
 // DefaultDuration is the default number of epochs a storage ask is in effect for
 const DefaultDuration abi.ChainEpoch = 126227700 //100 year
@@ -87,7 +87,7 @@ func NewStoredAsk(ds datastore.Batching, dsKey datastore.Key, spn storagemarket.
 	if s.ask == nil {
 		// TODO: we should be fine with this state, and just say it means 'not actively accepting deals'
 		// for now... lets just set a price
-		if err := s.SetAsk(DefaultPrice, DefaultVerifiedPrice, DefaultDuration, opts...); err != nil {
+		if err := s.SetAsk( /* DefaultPrice, DefaultVerifiedPrice, */ DefaultDuration, opts...); err != nil {
 			return nil, xerrors.Errorf("failed setting a default price: %w", err)
 		}
 	}
@@ -98,7 +98,7 @@ func NewStoredAsk(ds datastore.Batching, dsKey datastore.Key, spn storagemarket.
 // duration, and options. Any previously-existing ask is replaced.  If no options are passed to configure
 // MinPieceSize and MaxPieceSize, the previous ask's values will be used, if available.
 // It also increments the sequence number on the ask
-func (s *StoredAsk) SetAsk(price abi.TokenAmount, verifiedPrice abi.TokenAmount, duration abi.ChainEpoch, options ...storagemarket.StorageAskOption) error {
+func (s *StoredAsk) SetAsk( /* price abi.TokenAmount, verifiedPrice abi.TokenAmount, */ duration abi.ChainEpoch, options ...storagemarket.StorageAskOption) error {
 	s.askLk.Lock()
 	defer s.askLk.Unlock()
 	var seqno uint64
@@ -117,14 +117,14 @@ func (s *StoredAsk) SetAsk(price abi.TokenAmount, verifiedPrice abi.TokenAmount,
 		return err
 	}
 	ask := &storagemarket.StorageAsk{
-		Price:         price,
-		VerifiedPrice: verifiedPrice,
-		Timestamp:     height,
-		Expiry:        height + duration,
-		Miner:         s.actor,
-		SeqNo:         seqno,
-		MinPieceSize:  minPieceSize,
-		MaxPieceSize:  maxPieceSize,
+		/* Price:         price,
+		VerifiedPrice: verifiedPrice, */
+		Timestamp:    height,
+		Expiry:       height + duration,
+		Miner:        s.actor,
+		SeqNo:        seqno,
+		MinPieceSize: minPieceSize,
+		MaxPieceSize: maxPieceSize,
 	}
 
 	for _, option := range options {

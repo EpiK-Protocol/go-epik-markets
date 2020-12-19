@@ -17,9 +17,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
 
 	"github.com/filecoin-project/go-fil-markets/shared"
 	"github.com/filecoin-project/go-fil-markets/shared_testutil"
@@ -188,9 +186,9 @@ func (n *FakeCommonNode) SignBytes(ctx context.Context, signer address.Address, 
 	return nil, n.SignBytesError
 }
 
-func (n *FakeCommonNode) DealProviderCollateralBounds(ctx context.Context, size abi.PaddedPieceSize, isVerified bool) (abi.TokenAmount, abi.TokenAmount, error) {
+/* func (n *FakeCommonNode) DealProviderCollateralBounds(ctx context.Context, size abi.PaddedPieceSize, isVerified bool) (abi.TokenAmount, abi.TokenAmount, error) {
 	return abi.NewTokenAmount(5000), builtin.TotalFilecoin, nil
-}
+} */
 
 // OnDealSectorCommitted returns immediately, and returns stubbed errors
 func (n *FakeCommonNode) OnDealSectorCommitted(ctx context.Context, provider address.Address, dealID abi.DealID, proposal market.DealProposal, publishCid *cid.Cid, cb storagemarket.DealSectorCommittedCallback) error {
@@ -320,8 +318,8 @@ type FakeProviderNode struct {
 	LastOnDealCompleteBytes             []byte
 	OnDealCompleteCalls                 []storagemarket.MinerDeal
 	LocatePieceForDealWithinSectorError error
-	DataCap                             *verifreg.DataCap
-	GetDataCapErr                       error
+	/* DataCap                             *verifreg.DataCap */
+	GetDataCapErr error
 }
 
 // PublishDeals simulates publishing a deal by adding it to the storage market state

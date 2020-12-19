@@ -6,14 +6,12 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-state-types/crypto"
 
 	"github.com/filecoin-project/go-fil-markets/shared_testutil"
-	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/network"
 )
 
@@ -99,20 +97,22 @@ func TestAskStreamSendReceiveAskRequest(t *testing.T) {
 			receiverDisabledNew: true,
 		},
 	}
-	for testCase, data := range testCases {
+	for testCase /* , data */ := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			td := shared_testutil.NewLibp2pTestData(ctx, t)
 			var fromNetwork, toNetwork network.StorageMarketNetwork
-			if data.senderDisabledNew {
+			/* if data.senderDisabledNew {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1, network.SupportedAskProtocols([]protocol.ID{storagemarket.OldAskProtocolID}))
 			} else {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1)
-			}
-			if data.receiverDisabledNew {
+			} */
+			fromNetwork = network.NewFromLibp2pHost(td.Host1)
+			/* if data.receiverDisabledNew {
 				toNetwork = network.NewFromLibp2pHost(td.Host2, network.SupportedAskProtocols([]protocol.ID{storagemarket.OldAskProtocolID}))
 			} else {
 				toNetwork = network.NewFromLibp2pHost(td.Host2)
-			}
+			} */
+			toNetwork = network.NewFromLibp2pHost(td.Host2)
 			toHost := td.Host2.ID()
 
 			// host1 gets no-op receiver
@@ -149,20 +149,22 @@ func TestAskStreamSendReceiveAskResponse(t *testing.T) {
 			receiverDisabledNew: true,
 		},
 	}
-	for testCase, data := range testCases {
+	for testCase /* , data */ := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			td := shared_testutil.NewLibp2pTestData(ctx, t)
 			var fromNetwork, toNetwork network.StorageMarketNetwork
-			if data.senderDisabledNew {
+			/* if data.senderDisabledNew {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1, network.SupportedAskProtocols([]protocol.ID{storagemarket.OldAskProtocolID}))
 			} else {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1)
-			}
-			if data.receiverDisabledNew {
+			} */
+			fromNetwork = network.NewFromLibp2pHost(td.Host1)
+			/* if data.receiverDisabledNew {
 				toNetwork = network.NewFromLibp2pHost(td.Host2, network.SupportedAskProtocols([]protocol.ID{storagemarket.OldAskProtocolID}))
 			} else {
 				toNetwork = network.NewFromLibp2pHost(td.Host2)
-			}
+			} */
+			toNetwork = network.NewFromLibp2pHost(td.Host2)
 			toHost := td.Host2.ID()
 
 			// host1 gets no-op receiver
@@ -242,20 +244,22 @@ func TestDealStreamSendReceiveDealProposal(t *testing.T) {
 			receiverDisabledNew: true,
 		},
 	}
-	for testCase, data := range testCases {
+	for testCase /* , data */ := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			td := shared_testutil.NewLibp2pTestData(ctx, t)
 			var fromNetwork, toNetwork network.StorageMarketNetwork
-			if data.senderDisabledNew {
+			/* if data.senderDisabledNew {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1, network.SupportedDealProtocols([]protocol.ID{storagemarket.OldDealProtocolID}))
 			} else {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1)
-			}
-			if data.receiverDisabledNew {
+			} */
+			fromNetwork = network.NewFromLibp2pHost(td.Host1)
+			/* if data.receiverDisabledNew {
 				toNetwork = network.NewFromLibp2pHost(td.Host2, network.SupportedDealProtocols([]protocol.ID{storagemarket.OldDealProtocolID}))
 			} else {
 				toNetwork = network.NewFromLibp2pHost(td.Host2)
-			}
+			} */
+			toNetwork = network.NewFromLibp2pHost(td.Host2)
 			toHost := td.Host2.ID()
 
 			tr := &testReceiver{t: t}
@@ -292,20 +296,22 @@ func TestDealStreamSendReceiveDealResponse(t *testing.T) {
 			receiverDisabledNew: true,
 		},
 	}
-	for testCase, data := range testCases {
+	for testCase /* , data */ := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			td := shared_testutil.NewLibp2pTestData(ctx, t)
 			var fromNetwork, toNetwork network.StorageMarketNetwork
-			if data.senderDisabledNew {
+			/* if data.senderDisabledNew {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1, network.SupportedDealProtocols([]protocol.ID{storagemarket.OldDealProtocolID}))
 			} else {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1)
-			}
-			if data.receiverDisabledNew {
+			} */
+			fromNetwork = network.NewFromLibp2pHost(td.Host1)
+			/* if data.receiverDisabledNew {
 				toNetwork = network.NewFromLibp2pHost(td.Host2, network.SupportedDealProtocols([]protocol.ID{storagemarket.OldDealProtocolID}))
 			} else {
 				toNetwork = network.NewFromLibp2pHost(td.Host2)
-			}
+			} */
+			toNetwork = network.NewFromLibp2pHost(td.Host2)
 			toPeer := td.Host2.ID()
 
 			tr := &testReceiver{t: t}
@@ -390,20 +396,22 @@ func TestDealStatusStreamSendReceiveRequest(t *testing.T) {
 			receiverDisabledNew: true,
 		},
 	}
-	for testCase, data := range testCases {
+	for testCase /* , data */ := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			td := shared_testutil.NewLibp2pTestData(ctx, t)
 			var fromNetwork, toNetwork network.StorageMarketNetwork
-			if data.senderDisabledNew {
+			/* if data.senderDisabledNew {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1, network.SupportedDealStatusProtocols([]protocol.ID{storagemarket.OldDealStatusProtocolID}))
 			} else {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1)
-			}
-			if data.receiverDisabledNew {
+			} */
+			fromNetwork = network.NewFromLibp2pHost(td.Host1)
+			/* if data.receiverDisabledNew {
 				toNetwork = network.NewFromLibp2pHost(td.Host2, network.SupportedDealStatusProtocols([]protocol.ID{storagemarket.OldDealStatusProtocolID}))
 			} else {
 				toNetwork = network.NewFromLibp2pHost(td.Host2)
-			}
+			} */
+			toNetwork = network.NewFromLibp2pHost(td.Host2)
 			toHost := td.Host2.ID()
 
 			// host1 gets no-op receiver
@@ -440,20 +448,22 @@ func TestDealStatusStreamSendReceiveResponse(t *testing.T) {
 			receiverDisabledNew: true,
 		},
 	}
-	for testCase, data := range testCases {
+	for testCase /* , data */ := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			td := shared_testutil.NewLibp2pTestData(ctx, t)
 			var fromNetwork, toNetwork network.StorageMarketNetwork
-			if data.senderDisabledNew {
+			/* if data.senderDisabledNew {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1, network.SupportedDealStatusProtocols([]protocol.ID{storagemarket.OldDealStatusProtocolID}))
 			} else {
 				fromNetwork = network.NewFromLibp2pHost(td.Host1)
-			}
-			if data.receiverDisabledNew {
+			} */
+			fromNetwork = network.NewFromLibp2pHost(td.Host1)
+			/* if data.receiverDisabledNew {
 				toNetwork = network.NewFromLibp2pHost(td.Host2, network.SupportedDealStatusProtocols([]protocol.ID{storagemarket.OldDealStatusProtocolID}))
 			} else {
 				toNetwork = network.NewFromLibp2pHost(td.Host2)
-			}
+			} */
+			toNetwork = network.NewFromLibp2pHost(td.Host2)
 			toHost := td.Host2.ID()
 
 			// host1 gets no-op receiver

@@ -19,7 +19,6 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
-	market2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 
 	"github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/piecestore"
@@ -89,18 +88,18 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("proposal PieceCID had wrong prefix"))
 	}
 
-	if proposal.EndEpoch <= proposal.StartEpoch {
+	/* if proposal.EndEpoch <= proposal.StartEpoch {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("proposal end before proposal start"))
-	}
+	} */
 
 	if curEpoch > proposal.StartEpoch {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("deal start epoch has already elapsed"))
 	}
 
-	minDuration, maxDuration := market2.DealDurationBounds(proposal.PieceSize)
+	/* minDuration, maxDuration := market2.DealDurationBounds(proposal.PieceSize)
 	if proposal.Duration() < minDuration || proposal.Duration() > maxDuration {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("deal duration out of bounds (min, max, provided): %d, %d, %d", minDuration, maxDuration, proposal.Duration()))
-	}
+	} */
 
 	//TODO:larry
 	// list, err := environment.Node().ListProviderDeals(ctx.Context(), deal.Proposal.Provider, tok)
@@ -114,7 +113,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 	// 	}
 	// }
 
-	pcMin, pcMax, err := environment.Node().DealProviderCollateralBounds(ctx.Context(), proposal.PieceSize, proposal.VerifiedDeal)
+	/* pcMin, pcMax, err := environment.Node().DealProviderCollateralBounds(ctx.Context(), proposal.PieceSize, proposal.VerifiedDeal)
 	if err != nil {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("node error getting collateral bounds: %w", err))
 	}
@@ -136,7 +135,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 	if proposal.StoragePricePerEpoch.LessThan(minPrice) {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected,
 			xerrors.Errorf("storage price per epoch less than asking price: %s < %s", proposal.StoragePricePerEpoch, minPrice))
-	}
+	} */
 
 	if proposal.PieceSize < environment.Ask().MinPieceSize {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected,
@@ -148,7 +147,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 			xerrors.Errorf("piece size more than maximum allowed size: %d > %d", proposal.PieceSize, environment.Ask().MaxPieceSize))
 	}
 
-	// check market funds
+	/* // check market funds
 	clientMarketBalance, err := environment.Node().GetBalance(ctx.Context(), proposal.Client, tok)
 	if err != nil {
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("node error getting client market balance failed: %w", err))
@@ -160,7 +159,7 @@ func ValidateDealProposal(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventDealRejected, xerrors.Errorf("clientMarketBalance.Available too small: %d < %d", clientMarketBalance.Available, proposal.ClientBalanceRequirement()))
 	}
 
-	/* // Verified deal checks
+	// Verified deal checks
 	if proposal.VerifiedDeal {
 		dataCap, err := environment.Node().GetDataCap(ctx.Context(), proposal.Client, tok)
 		if err != nil {
@@ -237,12 +236,12 @@ func ReserveProviderFunds(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("looking up miner worker: %w", err))
 	}
 
-	mcid, err := node.ReserveFunds(ctx.Context(), waddr, deal.Proposal.Provider, deal.Proposal.ProviderCollateral)
+	mcid, err := node.ReserveFunds(ctx.Context(), waddr, deal.Proposal.Provider, big.Zero() /* deal.Proposal.ProviderCollateral */)
 	if err != nil {
 		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("reserving funds: %w", err))
 	}
 
-	_ = ctx.Trigger(storagemarket.ProviderEventFundsReserved, deal.Proposal.ProviderCollateral)
+	_ = ctx.Trigger(storagemarket.ProviderEventFundsReserved, big.Zero() /* deal.Proposal.ProviderCollateral */)
 
 	// if no message was sent, and there was no error, funds were already available
 	if mcid == cid.Undef {

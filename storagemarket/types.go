@@ -19,16 +19,19 @@ import (
 //go:generate cbor-gen-for --map-encoding ClientDeal MinerDeal Balance SignedStorageAsk StorageAsk DataRef ProviderDealState
 
 // DealProtocolID is the ID for the libp2p protocol for proposing storage deals.
-const OldDealProtocolID = "/fil/storage/mk/1.0.1"
-const DealProtocolID = "/fil/storage/mk/1.1.0"
+const DealProtocolID = "/epk/storage/mk/1.1.0"
+
+/* const OldDealProtocolID = "/epk/storage/mk/1.0.1" */
 
 // AskProtocolID is the ID for the libp2p protocol for querying miners for their current StorageAsk.
-const OldAskProtocolID = "/fil/storage/ask/1.0.1"
-const AskProtocolID = "/fil/storage/ask/1.1.0"
+const AskProtocolID = "/epk/storage/ask/1.1.0"
+
+/* const OldAskProtocolID = "/epk/storage/ask/1.0.1" */
 
 // DealStatusProtocolID is the ID for the libp2p protocol for querying miners for the current status of a deal.
-const OldDealStatusProtocolID = "/fil/storage/status/1.0.1"
-const DealStatusProtocolID = "/fil/storage/status/1.1.0"
+const DealStatusProtocolID = "/epk/storage/status/1.1.0"
+
+/* const OldDealStatusProtocolID = "/epk/storage/status/1.0.1" */
 
 // Balance represents a current balance of funds in the StorageMarketActor.
 type Balance struct {
@@ -41,15 +44,15 @@ type Balance struct {
 // ask is a precondition, but not sufficient to ensure the deal is accepted (the
 // storage provider may run its own decision logic).
 type StorageAsk struct {
-	// Price per GiB / Epoch
+	/* // Price per GiB / Epoch
 	Price         abi.TokenAmount
-	VerifiedPrice abi.TokenAmount
+	VerifiedPrice abi.TokenAmount */
 
 	MinPieceSize abi.PaddedPieceSize
 	MaxPieceSize abi.PaddedPieceSize
 	Miner        address.Address
 	Timestamp    abi.ChainEpoch
-	Expiry       abi.ChainEpoch
+	Expiry       abi.ChainEpoch // TODO: remove?
 	SeqNo        uint64
 }
 
@@ -149,17 +152,17 @@ type ProposeStorageDealResult struct {
 
 // ProposeStorageDealParams describes the parameters for proposing a storage deal
 type ProposeStorageDealParams struct {
-	Addr          address.Address
-	Info          *StorageProviderInfo
-	Data          *DataRef
-	StartEpoch    abi.ChainEpoch
-	EndEpoch      abi.ChainEpoch
-	Price         abi.TokenAmount
+	Addr       address.Address
+	Info       *StorageProviderInfo
+	Data       *DataRef
+	StartEpoch abi.ChainEpoch
+	/* EndEpoch      abi.ChainEpoch
+	Price         abi.TokenAmount */
 	Collateral    abi.TokenAmount
 	Rt            abi.RegisteredSealProof
 	FastRetrieval bool
-	VerifiedDeal  bool
-	StoreID       *multistore.StoreID
+	/* VerifiedDeal  bool */
+	StoreID *multistore.StoreID
 }
 
 const (

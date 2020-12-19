@@ -12,7 +12,6 @@ import (
 	gsnetwork "github.com/ipfs/go-graphsync/network"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -23,7 +22,6 @@ import (
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
 	"github.com/filecoin-project/go-fil-markets/shared_testutil"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
@@ -80,13 +78,13 @@ func NewHarnessWithTestData(t *testing.T, ctx context.Context, td *shared_testut
 
 	providerDs := namespace.Wrap(td.Ds1, datastore.NewKey("/deals/provider"))
 	networkOptions := []network.Option{network.RetryParameters(0, 0, 0)}
-	if disableNewDeals {
+	/* if disableNewDeals {
 		networkOptions = append(networkOptions,
 			network.SupportedAskProtocols([]protocol.ID{storagemarket.OldAskProtocolID}),
 			network.SupportedDealProtocols([]protocol.ID{storagemarket.OldDealProtocolID}),
 			network.SupportedDealStatusProtocols([]protocol.ID{storagemarket.OldDealStatusProtocolID}),
 		)
-	}
+	} */
 	provider, err := storageimpl.NewProvider(
 		network.NewFromLibp2pHost(td.Host2, networkOptions...),
 		providerDs,
@@ -102,7 +100,7 @@ func NewHarnessWithTestData(t *testing.T, ctx context.Context, td *shared_testut
 	assert.NoError(t, err)
 
 	// set ask price where we'll accept any price
-	err = provider.SetAsk(big.NewInt(0), big.NewInt(0), 50_000)
+	err = provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 	assert.NoError(t, err)
 
 	return &StorageHarness{
@@ -138,21 +136,21 @@ func (h *StorageHarness) CreateNewProvider(t *testing.T, ctx context.Context, td
 	h.Provider = provider
 }
 
-func (h *StorageHarness) ProposeStorageDeal(t *testing.T, dataRef *storagemarket.DataRef, fastRetrieval, verifiedDeal bool) *storagemarket.ProposeStorageDealResult {
-	var dealDuration = abi.ChainEpoch(180 * builtin.EpochsInDay)
+func (h *StorageHarness) ProposeStorageDeal(t *testing.T, dataRef *storagemarket.DataRef, fastRetrieval /* , verifiedDeal */ bool) *storagemarket.ProposeStorageDealResult {
+	/* var dealDuration = abi.ChainEpoch(180 * builtin.EpochsInDay) */
 
 	result, err := h.Client.ProposeStorageDeal(h.Ctx, storagemarket.ProposeStorageDealParams{
-		Addr:          h.ClientAddr,
-		Info:          &h.ProviderInfo,
-		Data:          dataRef,
-		StartEpoch:    h.Epoch + 100,
-		EndEpoch:      h.Epoch + 100 + dealDuration,
-		Price:         big.NewInt(1),
+		Addr:       h.ClientAddr,
+		Info:       &h.ProviderInfo,
+		Data:       dataRef,
+		StartEpoch: h.Epoch + 100,
+		/* EndEpoch:      h.Epoch + 100 + dealDuration,
+		Price:         big.NewInt(1), */
 		Collateral:    big.NewInt(0),
 		Rt:            abi.RegisteredSealProof_StackedDrg2KiBV1,
 		FastRetrieval: fastRetrieval,
-		VerifiedDeal:  verifiedDeal,
-		StoreID:       h.StoreID,
+		/* VerifiedDeal:  verifiedDeal, */
+		StoreID: h.StoreID,
 	})
 	assert.NoError(t, err)
 	return result

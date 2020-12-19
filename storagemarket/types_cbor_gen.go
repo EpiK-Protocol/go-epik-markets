@@ -1644,43 +1644,11 @@ func (t *StorageAsk) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{168}); err != nil {
+	if _, err := w.Write([]byte{166}); err != nil {
 		return err
 	}
 
 	scratch := make([]byte, 9)
-
-	// t.Price (big.Int) (struct)
-	if len("Price") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Price\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Price"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Price")); err != nil {
-		return err
-	}
-
-	if err := t.Price.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.VerifiedPrice (big.Int) (struct)
-	if len("VerifiedPrice") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"VerifiedPrice\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("VerifiedPrice"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("VerifiedPrice")); err != nil {
-		return err
-	}
-
-	if err := t.VerifiedPrice.MarshalCBOR(w); err != nil {
-		return err
-	}
 
 	// t.MinPieceSize (abi.PaddedPieceSize) (uint64)
 	if len("MinPieceSize") > cbg.MaxLength {
@@ -1826,27 +1794,7 @@ func (t *StorageAsk) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		switch name {
-		// t.Price (big.Int) (struct)
-		case "Price":
-
-			{
-
-				if err := t.Price.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.Price: %w", err)
-				}
-
-			}
-			// t.VerifiedPrice (big.Int) (struct)
-		case "VerifiedPrice":
-
-			{
-
-				if err := t.VerifiedPrice.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.VerifiedPrice: %w", err)
-				}
-
-			}
-			// t.MinPieceSize (abi.PaddedPieceSize) (uint64)
+		// t.MinPieceSize (abi.PaddedPieceSize) (uint64)
 		case "MinPieceSize":
 
 			{
@@ -1966,7 +1914,7 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{164}); err != nil {
+	if _, err := w.Write([]byte{166}); err != nil {
 		return err
 	}
 
@@ -2049,6 +1997,51 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.Expert (string) (string)
+	if len("Expert") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Expert\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Expert"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Expert")); err != nil {
+		return err
+	}
+
+	if len(t.Expert) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Expert was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Expert))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Expert)); err != nil {
+		return err
+	}
+
+	// t.Bounty (string) (string)
+	if len("Bounty") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Bounty\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Bounty"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Bounty")); err != nil {
+		return err
+	}
+
+	if len(t.Bounty) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Bounty was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Bounty))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Bounty)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2146,6 +2139,28 @@ func (t *DataRef) UnmarshalCBOR(r io.Reader) error {
 				}
 				t.PieceSize = abi.UnpaddedPieceSize(extra)
 
+			}
+			// t.Expert (string) (string)
+		case "Expert":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.Expert = string(sval)
+			}
+			// t.Bounty (string) (string)
+		case "Bounty":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.Bounty = string(sval)
 			}
 
 		default:

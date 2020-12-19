@@ -220,8 +220,8 @@ func MigrateMinerDeal0To1(oldCd *MinerDeal0) (*storagemarket.MinerDeal, error) {
 // MigrateStorageAsk0To1 migrates a tuple encoded storage ask to a map encoded storage ask
 func MigrateStorageAsk0To1(oldSa *StorageAsk0) *storagemarket.StorageAsk {
 	return &storagemarket.StorageAsk{
-		Price:         oldSa.Price,
-		VerifiedPrice: oldSa.VerifiedPrice,
+		/* Price:         oldSa.Price,
+		VerifiedPrice: oldSa.VerifiedPrice, */
 
 		MinPieceSize: oldSa.MinPieceSize,
 		MaxPieceSize: oldSa.MaxPieceSize,

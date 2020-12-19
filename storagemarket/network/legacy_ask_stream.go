@@ -1,6 +1,6 @@
 package network
 
-import (
+/* import (
 	"bufio"
 	"context"
 
@@ -89,4 +89,4 @@ func (as *legacyAskStream) WriteAskResponse(qr AskResponse, resign ResigningFunc
 
 func (as *legacyAskStream) Close() error {
 	return as.rw.Close()
-}
+} */

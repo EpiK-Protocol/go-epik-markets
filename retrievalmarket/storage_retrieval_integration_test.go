@@ -54,10 +54,10 @@ func TestStorageRetrieval(t *testing.T) {
 	_ = sh.Client.SubscribeToEvents(clientSubscriber)
 
 	// set ask price where we'll accept any price
-	err := sh.Provider.SetAsk(big.NewInt(0), big.NewInt(0), 50_000)
+	err := sh.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 	assert.NoError(t, err)
 
-	result := sh.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: sh.PayloadCid}, false, false)
+	result := sh.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: sh.PayloadCid}, false /* , false */)
 	require.False(t, result.ProposalCid.Equals(cid.Undef))
 
 	time.Sleep(time.Millisecond * 200)

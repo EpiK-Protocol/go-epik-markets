@@ -1,6 +1,6 @@
 package network
 
-import (
+/* import (
 	"bufio"
 	"context"
 
@@ -96,4 +96,4 @@ func (d *legacyDealStatusStream) Close() error {
 
 func (d *legacyDealStatusStream) RemotePeer() peer.ID {
 	return d.p
-}
+} */

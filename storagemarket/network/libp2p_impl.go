@@ -65,15 +65,15 @@ func NewFromLibp2pHost(h host.Host, options ...Option) StorageMarketNetwork {
 		maxAttemptDuration:    defaultMaxAttemptDuration,
 		supportedAskProtocols: []protocol.ID{
 			storagemarket.AskProtocolID,
-			storagemarket.OldAskProtocolID,
+			/* storagemarket.OldAskProtocolID, */
 		},
 		supportedDealProtocols: []protocol.ID{
 			storagemarket.DealProtocolID,
-			storagemarket.OldDealProtocolID,
+			/* storagemarket.OldDealProtocolID, */
 		},
 		supportedDealStatusProtocols: []protocol.ID{
 			storagemarket.DealStatusProtocolID,
-			storagemarket.OldDealStatusProtocolID,
+			/* storagemarket.OldDealStatusProtocolID, */
 		},
 	}
 	for _, option := range options {
@@ -103,9 +103,9 @@ func (impl *libp2pStorageMarketNetwork) NewAskStream(ctx context.Context, id pee
 		return nil, err
 	}
 	buffered := bufio.NewReaderSize(s, 16)
-	if s.Protocol() == storagemarket.OldAskProtocolID {
+	/* if s.Protocol() == storagemarket.OldAskProtocolID {
 		return &legacyAskStream{p: id, rw: s, buffered: buffered}, nil
-	}
+	} */
 	return &askStream{p: id, rw: s, buffered: buffered}, nil
 }
 
@@ -115,9 +115,9 @@ func (impl *libp2pStorageMarketNetwork) NewDealStream(ctx context.Context, id pe
 		return nil, err
 	}
 	buffered := bufio.NewReaderSize(s, 16)
-	if s.Protocol() == storagemarket.OldDealProtocolID {
+	/* if s.Protocol() == storagemarket.OldDealProtocolID {
 		return &legacyDealStream{p: id, rw: s, buffered: buffered, host: impl.host}, nil
-	}
+	} */
 	return &dealStream{p: id, rw: s, buffered: buffered, host: impl.host}, nil
 }
 
@@ -128,9 +128,9 @@ func (impl *libp2pStorageMarketNetwork) NewDealStatusStream(ctx context.Context,
 		return nil, err
 	}
 	buffered := bufio.NewReaderSize(s, 16)
-	if s.Protocol() == storagemarket.OldDealStatusProtocolID {
+	/* if s.Protocol() == storagemarket.OldDealStatusProtocolID {
 		return &legacyDealStatusStream{p: id, rw: s, buffered: buffered}, nil
-	}
+	} */
 	return &dealStatusStream{p: id, rw: s, buffered: buffered}, nil
 }
 
@@ -194,11 +194,12 @@ func (impl *libp2pStorageMarketNetwork) handleNewAskStream(s network.Stream) {
 	reader := impl.getReaderOrReset(s)
 	if reader != nil {
 		var as StorageAskStream
-		if s.Protocol() == storagemarket.OldAskProtocolID {
+		/* if s.Protocol() == storagemarket.OldAskProtocolID {
 			as = &legacyAskStream{s.Conn().RemotePeer(), s, reader}
 		} else {
 			as = &askStream{s.Conn().RemotePeer(), s, reader}
-		}
+		} */
+		as = &askStream{s.Conn().RemotePeer(), s, reader}
 		impl.receiver.HandleAskStream(as)
 	}
 }
@@ -207,11 +208,12 @@ func (impl *libp2pStorageMarketNetwork) handleNewDealStream(s network.Stream) {
 	reader := impl.getReaderOrReset(s)
 	if reader != nil {
 		var ds StorageDealStream
-		if s.Protocol() == storagemarket.OldDealProtocolID {
+		/* if s.Protocol() == storagemarket.OldDealProtocolID {
 			ds = &legacyDealStream{s.Conn().RemotePeer(), impl.host, s, reader}
 		} else {
 			ds = &dealStream{s.Conn().RemotePeer(), impl.host, s, reader}
-		}
+		} */
+		ds = &dealStream{s.Conn().RemotePeer(), impl.host, s, reader}
 		impl.receiver.HandleDealStream(ds)
 	}
 }
@@ -220,11 +222,12 @@ func (impl *libp2pStorageMarketNetwork) handleNewDealStatusStream(s network.Stre
 	reader := impl.getReaderOrReset(s)
 	if reader != nil {
 		var qs DealStatusStream
-		if s.Protocol() == storagemarket.OldDealStatusProtocolID {
+		/* if s.Protocol() == storagemarket.OldDealStatusProtocolID {
 			qs = &legacyDealStatusStream{s.Conn().RemotePeer(), impl.host, s, reader}
 		} else {
 			qs = &dealStatusStream{s.Conn().RemotePeer(), impl.host, s, reader}
-		}
+		} */
+		qs = &dealStatusStream{s.Conn().RemotePeer(), impl.host, s, reader}
 		impl.receiver.HandleDealStatusStream(qs)
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/go-fil-markets/pieceio"
 	"github.com/filecoin-project/go-fil-markets/pieceio/cario"
@@ -74,10 +73,10 @@ func TestMakeDeal(t *testing.T) {
 			_ = h.Client.SubscribeToEvents(clientSubscriber)
 
 			// set ask price where we'll accept any price
-			err := h.Provider.SetAsk(big.NewInt(0), big.NewInt(0), 50_000)
+			err := h.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 			assert.NoError(t, err)
 
-			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, true, false)
+			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, true /* , false */)
 			proposalCid := result.ProposalCid
 
 			dealStatesToStrings := func(states []storagemarket.StorageDealStatus) []string {
@@ -200,7 +199,7 @@ func TestMakeDealOffline(t *testing.T) {
 		PieceSize:    size,
 	}
 
-	result := h.ProposeStorageDeal(t, dataRef, false, false)
+	result := h.ProposeStorageDeal(t, dataRef, false /* , false */)
 	proposalCid := result.ProposalCid
 
 	wg := sync.WaitGroup{}
@@ -259,7 +258,7 @@ func TestMakeDealNonBlocking(t *testing.T) {
 	h.ClientNode.AddFundsCid = testCids[0]
 	shared_testutil.StartAndWaitForReady(ctx, t, h.Client)
 
-	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false, false)
+	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false /* , false */)
 
 	wg := sync.WaitGroup{}
 	h.WaitForClientEvent(&wg, storagemarket.ClientEventDataTransferComplete)
@@ -302,7 +301,7 @@ func TestRestartOnlyProviderDataTransfer(t *testing.T) {
 	shared_testutil.StartAndWaitForReady(ctx, t, h.Client)
 
 	// set ask price where we'll accept any price
-	err := h.Provider.SetAsk(big.NewInt(0), big.NewInt(0), 50_000)
+	err := h.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 	require.NoError(t, err)
 
 	// wait for provider to enter deal transferring state and stop
@@ -325,7 +324,7 @@ func TestRestartOnlyProviderDataTransfer(t *testing.T) {
 		}
 	})
 
-	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false, false)
+	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false /* , false */)
 	proposalCid := result.ProposalCid
 	t.Log("storage deal proposed")
 
@@ -463,7 +462,7 @@ func TestRestartClient(t *testing.T) {
 			shared_testutil.StartAndWaitForReady(ctx, t, h.Provider)
 
 			// set ask price where we'll accept any price
-			err := h.Provider.SetAsk(big.NewInt(0), big.NewInt(0), 50_000)
+			err := h.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 			require.NoError(t, err)
 
 			wg := sync.WaitGroup{}
@@ -503,7 +502,7 @@ func TestRestartClient(t *testing.T) {
 				})
 			}
 
-			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false, false)
+			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false /* , false */)
 			proposalCid := result.ProposalCid
 			t.Log("storage deal proposed")
 

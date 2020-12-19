@@ -141,7 +141,7 @@ func MakeTestDealPayment() retrievalmarket.DealPayment {
 // MakeTestUnsignedDealProposal generates a deal proposal with no signature
 func MakeTestUnsignedDealProposal() market.DealProposal {
 	start := uint64(rand.Int31())
-	end := start + uint64(rand.Int31())
+	/* end := start + uint64(rand.Int31()) */
 
 	return market.DealProposal{
 		PieceCID:  GenerateCids(1)[0],
@@ -151,11 +151,11 @@ func MakeTestUnsignedDealProposal() market.DealProposal {
 		Provider: address.TestAddress2,
 
 		StartEpoch: abi.ChainEpoch(start),
-		EndEpoch:   abi.ChainEpoch(end),
+		/* EndEpoch:   abi.ChainEpoch(end),
 
 		StoragePricePerEpoch: MakeTestTokenAmount(),
 		ProviderCollateral:   MakeTestTokenAmount(),
-		ClientCollateral:     MakeTestTokenAmount(),
+		ClientCollateral:     MakeTestTokenAmount(), */
 	}
 }
 
@@ -229,13 +229,13 @@ func MakeTestMinerDeal(state storagemarket.StorageDealStatus, clientDealProposal
 // MakeTestStorageAsk generates a storage ask
 func MakeTestStorageAsk() *storagemarket.StorageAsk {
 	return &storagemarket.StorageAsk{
-		Price:         MakeTestTokenAmount(),
-		VerifiedPrice: MakeTestTokenAmount(),
-		MinPieceSize:  abi.PaddedPieceSize(rand.Uint64()),
-		Miner:         address.TestAddress2,
-		Timestamp:     abi.ChainEpoch(rand.Int63()),
-		Expiry:        abi.ChainEpoch(rand.Int63()),
-		SeqNo:         rand.Uint64(),
+		/* Price:         MakeTestTokenAmount(),
+		VerifiedPrice: MakeTestTokenAmount(), */
+		MinPieceSize: abi.PaddedPieceSize(rand.Uint64()),
+		Miner:        address.TestAddress2,
+		Timestamp:    abi.ChainEpoch(rand.Int63()),
+		Expiry:       abi.ChainEpoch(rand.Int63()),
+		SeqNo:        rand.Uint64(),
 	}
 }
 

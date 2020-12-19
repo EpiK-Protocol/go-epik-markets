@@ -12,6 +12,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-statemachine/fsm"
 
@@ -42,12 +43,12 @@ type ClientStateEntryFunc func(ctx fsm.Context, environment ClientDealEnvironmen
 func ReserveClientFunds(ctx fsm.Context, environment ClientDealEnvironment, deal storagemarket.ClientDeal) error {
 	node := environment.Node()
 
-	mcid, err := node.ReserveFunds(ctx.Context(), deal.Proposal.Client, deal.Proposal.Client, deal.Proposal.ClientBalanceRequirement())
+	mcid, err := node.ReserveFunds(ctx.Context(), deal.Proposal.Client, deal.Proposal.Client, big.Zero() /* deal.Proposal.ClientBalanceRequirement() */)
 	if err != nil {
 		return ctx.Trigger(storagemarket.ClientEventReserveFundsFailed, err)
 	}
 
-	_ = ctx.Trigger(storagemarket.ClientEventFundsReserved, deal.Proposal.ClientBalanceRequirement())
+	_ = ctx.Trigger(storagemarket.ClientEventFundsReserved, big.Zero() /* deal.Proposal.ClientBalanceRequirement() */)
 
 	// if no message was sent, and there was no error, funds were already available
 	if mcid == cid.Undef {

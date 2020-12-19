@@ -20,7 +20,6 @@ import (
 	versionedfsm "github.com/filecoin-project/go-ds-versioning/pkg/fsm"
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
@@ -342,13 +341,13 @@ func (c *Client) ProposeStorageDeal(ctx context.Context, params storagemarket.Pr
 		return nil, fmt.Errorf("cannot propose a deal whose piece size (%d) is greater than sector size (%d)", pieceSize.Padded(), params.Info.SectorSize)
 	}
 
-	pcMin := params.Collateral
+	/* pcMin := params.Collateral
 	if pcMin.Int == nil || pcMin.IsZero() {
 		pcMin, _, err = c.node.DealProviderCollateralBounds(ctx, pieceSize.Padded(), params.VerifiedDeal)
 		if err != nil {
 			return nil, xerrors.Errorf("computing deal provider collateral bound failed: %w", err)
 		}
-	}
+	} */
 
 	label, err := clientutils.LabelField(params.Data.Root)
 	if err != nil {
@@ -356,17 +355,17 @@ func (c *Client) ProposeStorageDeal(ctx context.Context, params storagemarket.Pr
 	}
 
 	dealProposal := market.DealProposal{
-		PieceCID:             commP,
-		PieceSize:            pieceSize.Padded(),
-		Client:               params.Addr,
-		Provider:             params.Info.Address,
-		Label:                label,
-		StartEpoch:           params.StartEpoch,
-		EndEpoch:             params.EndEpoch,
+		PieceCID:   commP,
+		PieceSize:  pieceSize.Padded(),
+		Client:     params.Addr,
+		Provider:   params.Info.Address,
+		Label:      label,
+		StartEpoch: params.StartEpoch,
+		/* EndEpoch:             params.EndEpoch,
 		StoragePricePerEpoch: params.Price,
 		ProviderCollateral:   pcMin,
 		ClientCollateral:     big.Zero(),
-		VerifiedDeal:         params.VerifiedDeal,
+		VerifiedDeal:         params.VerifiedDeal, */
 	}
 
 	clientDealProposal, err := c.node.SignProposal(ctx, params.Addr, dealProposal)
