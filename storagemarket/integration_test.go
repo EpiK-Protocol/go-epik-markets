@@ -8,17 +8,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-datastore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-commp-utils/pieceio"
 	"github.com/filecoin-project/go-commp-utils/pieceio/cario"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
+	dtnet "github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-storedcounter"
 
 	"github.com/filecoin-project/go-fil-markets/shared"
 	"github.com/filecoin-project/go-fil-markets/shared_testutil"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/testharness"
+	"github.com/filecoin-project/go-fil-markets/storagemarket/testharness/dependencies"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/testnodes"
 )
 
@@ -78,14 +84,6 @@ func TestMakeDeal(t *testing.T) {
 
 			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, true /* , false */)
 			proposalCid := result.ProposalCid
-
-			dealStatesToStrings := func(states []storagemarket.StorageDealStatus) []string {
-				var out []string
-				for _, state := range states {
-					out = append(out, storagemarket.DealStates[state])
-				}
-				return out
-			}
 
 			var providerSeenDeal storagemarket.MinerDeal
 			var clientSeenDeal storagemarket.ClientDeal
@@ -285,15 +283,29 @@ func TestMakeDealNonBlocking(t *testing.T) {
 	}, 1*time.Second, 100*time.Millisecond, "actual deal status is %s", storagemarket.DealStates[pd.State])
 }
 
+// TestRestartOnlyProviderDataTransfer tests that when the provider is shut
+// down, the connection is broken and then the provider is restarted, the
+// data transfer will resume and the deal will complete successfully.
 func TestRestartOnlyProviderDataTransfer(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
-
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	h := testharness.NewHarness(t, ctx, true, noOpDelay, noOpDelay, false)
+
+	// Configure data-transfer to retry connection
+	dtClientNetRetry := dtnet.RetryParameters(time.Second, time.Second, 5, 1)
+	td := shared_testutil.NewLibp2pTestData(ctx, t)
+	td.DTNet1 = dtnet.NewFromLibp2pHost(td.Host1, dtClientNetRetry)
+
+	// Configure data-transfer to restart after stalling
+	restartConf := dtimpl.PushChannelRestartConfig(100*time.Millisecond, 10, 1, 200*time.Millisecond, 5)
+	smState := testnodes.NewStorageMarketState()
+	depGen := dependencies.NewDepGenerator()
+	depGen.ClientNewDataTransfer = func(ds datastore.Batching, dir string, transferNetwork dtnet.DataTransferNetwork, transport datatransfer.Transport, counter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
+		return dtimpl.NewDataTransfer(ds, dir, transferNetwork, transport, counter, restartConf)
+	}
+	deps := depGen.New(t, ctx, td, smState, "", noOpDelay, noOpDelay)
+	h := testharness.NewHarnessWithTestData(t, td, deps, true, false)
+
 	client := h.Client
 	host1 := h.TestData.Host1
 	host2 := h.TestData.Host2
@@ -306,14 +318,28 @@ func TestRestartOnlyProviderDataTransfer(t *testing.T) {
 	err := h.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 	require.NoError(t, err)
 
+	//h.DTClient.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+	//	fmt.Printf("dt-clnt %s: %s %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()], channelState.Message())
+	//})
+	//h.DTProvider.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+	//	fmt.Printf("dt-prov %s: %s %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()], channelState.Message())
+	//})
+	//
+	//_ = client.SubscribeToEvents(func(event storagemarket.ClientEvent, deal storagemarket.ClientDeal) {
+	//	fmt.Printf("%s: %s %s\n", storagemarket.ClientEvents[event], storagemarket.DealStates[deal.State], deal.Message)
+	//})
+	//_ = h.Provider.SubscribeToEvents(func(event storagemarket.ProviderEvent, deal storagemarket.MinerDeal) {
+	//	fmt.Printf("Provider %s: %s\n", storagemarket.ProviderEvents[event], storagemarket.DealStates[deal.State])
+	//})
+
 	// wait for provider to enter deal transferring state and stop
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var providerState []storagemarket.MinerDeal
-	_ = h.Provider.SubscribeToEvents(func(event storagemarket.ProviderEvent, deal storagemarket.MinerDeal) {
-		if event == storagemarket.ProviderEventDataTransferInitiated {
-			ev := storagemarket.ProviderEvents[event]
-			t.Logf("event %s has happened on provider, shutting down provider", ev)
+	h.DTClient.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		if event.Code == datatransfer.Accept {
+			t.Log("client has accepted data-transfer query, shutting down provider")
+
 			require.NoError(t, h.TestData.MockNet.UnlinkPeers(host1.ID(), host2.ID()))
 			require.NoError(t, h.TestData.MockNet.DisconnectPeers(host1.ID(), host2.ID()))
 			require.NoError(t, h.Provider.Stop())
@@ -339,15 +365,18 @@ func TestRestartOnlyProviderDataTransfer(t *testing.T) {
 	t.Logf("client state after stopping is %s", storagemarket.DealStates[cd.State])
 	require.True(t, cd.State == storagemarket.StorageDealStartDataTransfer || cd.State == storagemarket.StorageDealTransferring)
 
-	// RESTART ONLY PROVIDER
-	h.CreateNewProvider(t, ctx, h.TestData, h.TempFilePath, false)
+	// Create new provider (but don't restart yet)
+	newProvider := h.CreateNewProvider(t, ctx, h.TestData)
 
 	t.Logf("provider state after stopping is %s", storagemarket.DealStates[providerState[0].State])
 	require.Equal(t, storagemarket.StorageDealTransferring, providerState[0].State)
 
+	// This wait group will complete after the deal has completed on both the
+	// client and provider
 	expireWg := sync.WaitGroup{}
 	expireWg.Add(1)
-	_ = h.Provider.SubscribeToEvents(func(event storagemarket.ProviderEvent, deal storagemarket.MinerDeal) {
+	_ = newProvider.SubscribeToEvents(func(event storagemarket.ProviderEvent, deal storagemarket.MinerDeal) {
+		//fmt.Printf("New Provider %s: %s\n", storagemarket.ProviderEvents[event], storagemarket.DealStates[deal.State])
 		if event == storagemarket.ProviderEventDealExpired {
 			expireWg.Done()
 		}
@@ -360,24 +389,42 @@ func TestRestartOnlyProviderDataTransfer(t *testing.T) {
 		}
 	})
 
-	// sleep so go-data-transfer gives up on retries after creating new connection
-	time.Sleep(15 * time.Second)
+	// sleep for a moment
+	time.Sleep(1 * time.Second)
 	t.Log("finished sleeping")
+
+	// Restore connection, go-data-transfer should try to reconnect
 	require.NoError(t, h.TestData.MockNet.LinkAll())
 	time.Sleep(200 * time.Millisecond)
 	conn, err := h.TestData.MockNet.ConnectPeers(host1.ID(), host2.ID())
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	shared_testutil.StartAndWaitForReady(ctx, t, h.Provider)
+
+	// Restart the provider
+	shared_testutil.StartAndWaitForReady(ctx, t, newProvider)
 	t.Log("------- provider has been restarted---------")
+
+	// -------------------------------------------------------------------
+	// How to restart manually - shouldn't be needed as the data-transfer
+	// module will restart automatically, but leaving it here in case it's
+	// needed for debugging in future.
+	//chs, err := h.DTClient.InProgressChannels(ctx)
+	//require.Len(t, chs, 1)
+	//for chid := range chs {
+	//	h.DTClient.RestartDataTransferChannel(ctx, chid)
+	//}
+	// -------------------------------------------------------------------
+
+	// Wait till both client and provider have completed the deal
 	waitGroupWait(ctx, &expireWg)
 	t.Log("---------- finished waiting for expected events-------")
 
+	// Ensure the client and provider both reached the final state
 	cd, err = client.GetLocalDeal(ctx, proposalCid)
 	require.NoError(t, err)
 	shared_testutil.AssertDealState(t, storagemarket.StorageDealExpired, cd.State)
 
-	providerDeals, err := h.Provider.ListLocalDeals()
+	providerDeals, err := newProvider.ListLocalDeals()
 	require.NoError(t, err)
 
 	pd := providerDeals[0]
@@ -516,8 +563,8 @@ func TestRestartClient(t *testing.T) {
 			t.Logf("client state after stopping is %s", storagemarket.DealStates[cd.State])
 			require.Equal(t, tc.expectedClientState, cd.State)
 
-			h = testharness.NewHarnessWithTestData(t, ctx, h.TestData, h.SMState, true, h.TempFilePath, noOpDelay, noOpDelay,
-				false)
+			deps := dependencies.NewDependenciesWithTestData(t, ctx, h.TestData, h.SMState, "", noOpDelay, noOpDelay)
+			h = testharness.NewHarnessWithTestData(t, h.TestData, deps, true, false)
 
 			if len(providerState) == 0 {
 				t.Log("no deal created on provider after stopping")
@@ -565,6 +612,171 @@ func TestRestartClient(t *testing.T) {
 	}
 }
 
+// TestCancelDataTransfer tests that cancelling a data transfer cancels the deal
+func TestCancelDataTransfer(t *testing.T) {
+	run := func(t *testing.T, cancelByClient bool, hasConnectivity bool) {
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		h := testharness.NewHarness(t, ctx, true, noOpDelay, noOpDelay, false)
+		client := h.Client
+		provider := h.Provider
+		host1 := h.TestData.Host1
+		host2 := h.TestData.Host2
+
+		// start client and provider
+		shared_testutil.StartAndWaitForReady(ctx, t, h.Provider)
+		shared_testutil.StartAndWaitForReady(ctx, t, h.Client)
+
+		// set ask price where we'll accept any price
+		err := h.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50000)
+		require.NoError(t, err)
+
+		// wait for client to start transferring data
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		_ = h.Client.SubscribeToEvents(func(event storagemarket.ClientEvent, deal storagemarket.ClientDeal) {
+			if event == storagemarket.ClientEventDataTransferInitiated {
+				ev := storagemarket.ClientEvents[event]
+				t.Logf("event %s has happened on client", ev)
+
+				if !hasConnectivity {
+					t.Logf("disconnecting client and provider")
+					// Simulate the connection to the remote peer going down
+					require.NoError(t, h.TestData.MockNet.UnlinkPeers(host1.ID(), host2.ID()))
+					require.NoError(t, h.TestData.MockNet.DisconnectPeers(host1.ID(), host2.ID()))
+				}
+
+				wg.Done()
+			}
+		})
+
+		result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false, false)
+		proposalCid := result.ProposalCid
+		t.Log("storage deal proposed")
+
+		waitGroupWait(ctx, &wg)
+		if !hasConnectivity {
+			t.Log("network has been disconnected")
+		}
+
+		// Assert client is transferring data
+		cd, err := client.GetLocalDeal(ctx, proposalCid)
+		require.NoError(t, err)
+		t.Logf("client state after stopping is %s", storagemarket.DealStates[cd.State])
+		require.True(t, cd.State == storagemarket.StorageDealStartDataTransfer || cd.State == storagemarket.StorageDealTransferring)
+
+		// Keep track of client states
+		var clientErroredOut sync.WaitGroup
+		var clientstates []storagemarket.StorageDealStatus
+
+		// Client will only move to error state if
+		// - client initiates cancel
+		// - client receives cancel message from provider
+		if cancelByClient || hasConnectivity {
+			clientErroredOut.Add(1)
+			_ = h.Client.SubscribeToEvents(func(event storagemarket.ClientEvent, deal storagemarket.ClientDeal) {
+				if len(clientstates) == 0 || deal.State != clientstates[len(clientstates)-1] {
+					clientstates = append(clientstates, deal.State)
+				}
+
+				if deal.State == storagemarket.StorageDealError {
+					clientErroredOut.Done()
+				}
+			})
+		}
+
+		// Keep track of provider states
+		var providerErroredOut sync.WaitGroup
+		var providerstates []storagemarket.StorageDealStatus
+
+		// Provider will only move to error state if
+		// - provider initiates cancel
+		// - provider receives cancel message from client
+		if !cancelByClient || hasConnectivity {
+			providerErroredOut.Add(1)
+			_ = h.Provider.SubscribeToEvents(func(event storagemarket.ProviderEvent, deal storagemarket.MinerDeal) {
+				if len(providerstates) == 0 || deal.State != providerstates[len(providerstates)-1] {
+					providerstates = append(providerstates, deal.State)
+				}
+
+				if deal.State == storagemarket.StorageDealError {
+					providerErroredOut.Done()
+				}
+			})
+		}
+
+		// Should be one in-progress channel
+		chans, err := h.DTClient.InProgressChannels(ctx)
+		require.NoError(t, err)
+		require.Len(t, chans, 1)
+		for _, ch := range chans {
+			require.Equal(t, datatransfer.Ongoing, ch.Status())
+
+			dt := h.DTClient
+			if !cancelByClient {
+				dt = h.DTProvider
+			}
+
+			// Simulate data transfer channel being cancelled
+			chid := ch.ChannelID()
+			if hasConnectivity {
+				err := dt.CloseDataTransferChannel(ctx, chid)
+				require.NoError(t, err)
+			} else {
+				// If the network is down, use a short timeout so that the test
+				// doesn't take too long to complete
+				ctx, closeCtxCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+				defer closeCtxCancel()
+				err := dt.CloseDataTransferChannel(ctx, chid)
+				require.Error(t, err)
+			}
+		}
+
+		// Wait for the state machines to reach the error state
+		waitGroupWait(ctx, &clientErroredOut)
+		waitGroupWait(ctx, &providerErroredOut)
+
+		// Make sure state machine passed through expected states
+		possStates := []storagemarket.StorageDealStatus{
+			storagemarket.StorageDealTransferring,
+			storagemarket.StorageDealFailing,
+			storagemarket.StorageDealError,
+		}
+		expClientStates := possStates[len(possStates)-len(clientstates):]
+		assert.Equal(t, dealStatesToStrings(expClientStates), dealStatesToStrings(clientstates))
+		expProviderStates := possStates[len(possStates)-len(providerstates):]
+		assert.Equal(t, dealStatesToStrings(expProviderStates), dealStatesToStrings(providerstates))
+
+		// Verify the error message for the deal is correct
+		if cancelByClient || hasConnectivity {
+			deals, err := client.ListLocalDeals(ctx)
+			require.NoError(t, err)
+			assert.Len(t, deals, 1)
+			assert.Equal(t, "data transfer cancelled", deals[0].Message)
+		}
+		if !cancelByClient || hasConnectivity {
+			pdeals, err := provider.ListLocalDeals()
+			require.NoError(t, err)
+			assert.Len(t, pdeals, 1)
+			assert.Equal(t, "data transfer cancelled", pdeals[0].Message)
+		}
+	}
+
+	t.Run("client cancel request good connectivity", func(t *testing.T) {
+		run(t, true, true)
+	})
+	t.Run("client cancel request no connectivity", func(t *testing.T) {
+		run(t, true, false)
+	})
+	t.Run("provider cancel request good connectivity", func(t *testing.T) {
+		run(t, false, true)
+	})
+	t.Run("provider cancel request no connectivity", func(t *testing.T) {
+		run(t, false, false)
+	})
+}
+
 // waitGroupWait calls wg.Wait while respecting context cancellation
 func waitGroupWait(ctx context.Context, wg *sync.WaitGroup) {
 	done := make(chan struct{})
@@ -577,4 +789,12 @@ func waitGroupWait(ctx context.Context, wg *sync.WaitGroup) {
 	case <-ctx.Done():
 	case <-done:
 	}
+}
+
+func dealStatesToStrings(states []storagemarket.StorageDealStatus) []string {
+	var out []string
+	for _, state := range states {
+		out = append(out, storagemarket.DealStates[state])
+	}
+	return out
 }

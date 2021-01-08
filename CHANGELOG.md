@@ -1,5 +1,115 @@
 # go-fil-markets changelog
 
+# go-fil-markets v1.1.1
+
+- github.com/filecoin-project/go-fil-markets:
+  - feat: go-data-transfer v1.2.5 (with restart limit) (#470) ([filecoin-project/go-fil-markets#470](https://github.com/filecoin-project/go-fil-markets/pull/470))
+- github.com/filecoin-project/go-data-transfer (v1.2.4 -> v1.2.5):
+  - feat: limit consecutive restarts with no data transfer (#129) ([filecoin-project/go-data-transfer#129](https://github.com/filecoin-project/go-data-transfer/pull/129))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 4 | +212/-82 | 9 |
+| Dirk McCormick | 1 | +13/-0 | 1 |
+
+# go-fil-markets v1.1.0
+
+Better retry config
+
+### Changelog
+- github.com/filecoin-project/go-fil-markets:
+  - feat: retry config - separate max open attempts from backoff factor (#467) ([filecoin-project/go-fil-markets#467](https://github.com/filecoin-project/go-fil-markets/pull/467))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 2 | +236/-113 | 12 |
+
+# go-fil-markets v1.0.11
+
+When the miner restarts it should not dial the client, the client will automatically dial the miner.
+
+### Changelog
+
+- github.com/filecoin-project/go-fil-markets:
+  - on restart miner shouldn't dial client (#463) ([filecoin-project/go-fil-markets#463](https://github.com/filecoin-project/go-fil-markets/pull/463))
+- github.com/filecoin-project/go-data-transfer (v1.2.3 -> v1.2.4):
+  - Automatically restart push channel (#127) ([filecoin-project/go-data-transfer#127](https://github.com/filecoin-project/go-data-transfer/pull/127))
+- github.com/ipfs/go-graphsync (v0.5.0 -> v0.5.2):
+  - RegisterNetworkErrorListener should fire when there's an error connecting to the peer (#127) ([ipfs/go-graphsync#127](https://github.com/ipfs/go-graphsync/pull/127))
+  - Permit multiple data subscriptions per original topic (#128) ([ipfs/go-graphsync#128](https://github.com/ipfs/go-graphsync/pull/128))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 6 | +1491/-282 | 42 |
+| Alex Cruikshank | 1 | +188/-110 | 12 |
+| hannahhoward | 1 | +30/-14 | 8 |
+| Hannah Howard | 1 | +23/-6 | 3 |
+| Dirk McCormick | 1 | +19/-0 | 1 |
+
+# go-fil-markets v1.0.10
+
+### Changelog
+
+Generating Changelog for github.com/filecoin-project/go-fil-markets v1.0.9..73534649f61b89d2a332b0939e19aa440a9dc6dc
+- github.com/filecoin-project/go-fil-markets:
+  - feat: update to go-data-transfer v1.2.3 (#465) ([filecoin-project/go-fil-markets#465](https://github.com/filecoin-project/go-fil-markets/pull/465))
+  - Normalize final states for cancelled retrieval deals (#464) ([filecoin-project/go-fil-markets#464](https://github.com/filecoin-project/go-fil-markets/pull/464))
+- github.com/filecoin-project/go-data-transfer (v1.2.2 -> v1.2.3):
+  - Better retry config (#124) ([filecoin-project/go-data-transfer#124](https://github.com/filecoin-project/go-data-transfer/pull/124))
+  - feat: expose channel state on Manager interface (#125) ([filecoin-project/go-data-transfer#125](https://github.com/filecoin-project/go-data-transfer/pull/125))
+  - Fix typo, wrap correct FSM error (#123) ([filecoin-project/go-data-transfer#123](https://github.com/filecoin-project/go-data-transfer/pull/123))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 5 | +188/-10 | 10 |
+| Ingar Shu | 2 | +59/-26 | 16 |
+| Dirk McCormick | 1 | +16/-0 | 1 |
+
+# go-fil-markets v1.0.9
+
+### Changelog
+
+- github.com/filecoin-project/go-fil-markets:
+  - fix: clear deal message when deal accepted (#461) ([filecoin-project/go-fil-markets#461](https://github.com/filecoin-project/go-fil-markets/pull/461))
+  
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 2 | +24/-0 | 2 |
+
+
+# go-fil-markets v1.0.8
+
+### Changelog
+
+- feat: go-data-transfer 1.2.2 (#459) ([filecoin-project/go-fil-markets#459](https://github.com/filecoin-project/go-fil-markets/pull/459))
+- Cancel transfer should cause Storage deal to fail (#457) ([filecoin-project/go-fil-markets#457](https://github.com/filecoin-project/go-fil-markets/pull/457))
+- Give more visibility (to the client) while waiting for deal acceptance (#458) ([filecoin-project/go-fil-markets#458](https://github.com/filecoin-project/go-fil-markets/pull/458))
+- docs(CHANGELOG): update for v1.0.7 release ([filecoin-project/go-fil-markets#456](https://github.com/filecoin-project/go-fil-markets/pull/456))
+- github.com/filecoin-project/go-data-transfer (v1.0.1 -> v1.2.2):
+  - fix(graphsync): fix UseStore for restarts (#115) ([filecoin-project/go-data-transfer#115](https://github.com/filecoin-project/go-data-transfer/pull/115))
+  - Fire cancel locally even if remote cancel fails (#120) ([filecoin-project/go-data-transfer#120](https://github.com/filecoin-project/go-data-transfer/pull/120))
+  - fix: respect context when opening stream (#119) ([filecoin-project/go-data-transfer#119](https://github.com/filecoin-project/go-data-transfer/pull/119))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Hannah Howard | 2 | +1307/-213 | 22 |
+| dirkmc | 5 | +395/-82 | 23 |
+| Steven Allen | 4 | +419/-37 | 8 |
+| Ingar Shu | 1 | +10/-5 | 3 |
+| Dirk McCormick | 1 | +13/-0 | 1 |
+
 # go-fil-markets v1.0.7
 
 Seperate pre-commit & post-commit states for deals

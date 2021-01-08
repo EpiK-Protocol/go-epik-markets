@@ -93,7 +93,7 @@ func requireSetupTestClientAndProvider(ctx context.Context, t *testing.T, payChA
 	retrievalmarket.RetrievalPeer,
 	retrievalmarket.RetrievalProvider) {
 	testData := tut.NewLibp2pTestData(ctx, t)
-	nw1 := rmnet.NewFromLibp2pHost(testData.Host1, rmnet.RetryParameters(100*time.Millisecond, 1*time.Second, 5))
+	nw1 := rmnet.NewFromLibp2pHost(testData.Host1, rmnet.RetryParameters(100*time.Millisecond, 1*time.Second, 5, 5))
 	cids := tut.GenerateCids(2)
 	rcNode1 := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{
 		PayCh:          payChAddr,
@@ -103,7 +103,7 @@ func requireSetupTestClientAndProvider(ctx context.Context, t *testing.T, payChA
 
 	gs1 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host1), testData.Loader1, testData.Storer1)
 	dtTransport1 := dtgstransport.NewTransport(testData.Host1.ID(), gs1)
-	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTNet1, dtTransport1, testData.DTStoredCounter1)
+	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTTmpDir1, testData.DTNet1, dtTransport1, testData.DTStoredCounter1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func requireSetupTestClientAndProvider(ctx context.Context, t *testing.T, payChA
 	client, err := retrievalimpl.NewClient(nw1, testData.MultiStore1, dt1, rcNode1, &tut.TestPeerResolver{}, clientDs, testData.RetrievalStoredCounter1)
 	require.NoError(t, err)
 	tut.StartAndWaitForReady(ctx, t, client)
-	nw2 := rmnet.NewFromLibp2pHost(testData.Host2, rmnet.RetryParameters(0, 0, 0))
+	nw2 := rmnet.NewFromLibp2pHost(testData.Host2, rmnet.RetryParameters(0, 0, 0, 0))
 	providerNode := testnodes.NewTestRetrievalProviderNode()
 	pieceStore := tut.NewTestPieceStore()
 	expectedCIDs := tut.GenerateCids(3)
@@ -143,7 +143,7 @@ func requireSetupTestClientAndProvider(ctx context.Context, t *testing.T, payChA
 
 	gs2 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host2), testData.Loader2, testData.Storer2)
 	dtTransport2 := dtgstransport.NewTransport(testData.Host2.ID(), gs2)
-	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTNet2, dtTransport2, testData.DTStoredCounter2)
+	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTTmpDir2, testData.DTNet2, dtTransport2, testData.DTStoredCounter2)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, err)
@@ -409,7 +409,7 @@ func TestClientCanMakeDealWithProvider(t *testing.T) {
 				require.NoError(t, providerNode.ExpectVoucher(clientPaymentChannel, expectedVoucher, proof, voucherAmt, voucherAmt, nil))
 			}
 
-			nw1 := rmnet.NewFromLibp2pHost(testData.Host1, rmnet.RetryParameters(0, 0, 0))
+			nw1 := rmnet.NewFromLibp2pHost(testData.Host1, rmnet.RetryParameters(0, 0, 0, 0))
 			createdChan, newLaneAddr, createdVoucher, clientNode, client, err := setupClient(bgCtx, t, clientPaymentChannel, expectedVoucher, nw1, testData, testCase.addFunds, testCase.channelAvailableFunds)
 			require.NoError(t, err)
 			tut.StartAndWaitForReady(ctx, t, client)
@@ -525,11 +525,11 @@ CurrentInterval: %d
 			}
 
 			if testCase.failsUnseal {
-				require.Equal(t, retrievalmarket.DealStatusErrored, providerDealState.Status)
+				tut.AssertRetrievalDealState(t, retrievalmarket.DealStatusErrored, providerDealState.Status)
 			} else if testCase.cancelled {
-				require.Equal(t, retrievalmarket.DealStatusCancelled, providerDealState.Status)
+				tut.AssertRetrievalDealState(t, retrievalmarket.DealStatusCancelled, providerDealState.Status)
 			} else {
-				require.Equal(t, retrievalmarket.DealStatusCompleted, providerDealState.Status)
+				tut.AssertRetrievalDealState(t, retrievalmarket.DealStatusCompleted, providerDealState.Status)
 			}
 			// TODO this is terrible, but it's temporary until the test harness refactor
 			// in the resuming retrieval deals branch is done
@@ -599,7 +599,7 @@ func setupClient(
 
 	gs1 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host1), testData.Loader1, testData.Storer1)
 	dtTransport1 := dtgstransport.NewTransport(testData.Host1.ID(), gs1)
-	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTNet1, dtTransport1, testData.DTStoredCounter1)
+	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTTmpDir1, testData.DTNet1, dtTransport1, testData.DTStoredCounter1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
 	require.NoError(t, err)
@@ -621,7 +621,7 @@ func setupProvider(
 	decider retrievalimpl.DealDecider,
 	disableNewDeals bool,
 ) retrievalmarket.RetrievalProvider {
-	nw2 := rmnet.NewFromLibp2pHost(testData.Host2, rmnet.RetryParameters(0, 0, 0))
+	nw2 := rmnet.NewFromLibp2pHost(testData.Host2, rmnet.RetryParameters(0, 0, 0, 0))
 	pieceStore := tut.NewTestPieceStore()
 	expectedPiece := tut.GenerateCids(1)[0]
 	cidInfo := piecestore.CIDInfo{
@@ -636,7 +636,7 @@ func setupProvider(
 
 	gs2 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host2), testData.Loader2, testData.Storer2)
 	dtTransport2 := dtgstransport.NewTransport(testData.Host2.ID(), gs2)
-	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTNet2, dtTransport2, testData.DTStoredCounter2)
+	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTTmpDir2, testData.DTNet2, dtTransport2, testData.DTStoredCounter2)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, err)

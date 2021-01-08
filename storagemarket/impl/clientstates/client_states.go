@@ -126,7 +126,7 @@ func ProposeDeal(ctx fsm.Context, environment ClientDealEnvironment, deal storag
 
 // RestartDataTransfer restarts a data transfer to the provider that was initiated earlier
 func RestartDataTransfer(ctx fsm.Context, environment ClientDealEnvironment, deal storagemarket.ClientDeal) error {
-	log.Infof("restarting data transfer for deal deal %s", deal.ProposalCid)
+	log.Infof("restarting data transfer for deal %s", deal.ProposalCid)
 
 	if deal.TransferChannelID == nil {
 		return ctx.Trigger(storagemarket.ClientEventDataTransferRestartFailed, xerrors.New("channelId on client deal is nil"))
@@ -175,7 +175,7 @@ func CheckForDealAcceptance(ctx fsm.Context, environment ClientDealEnvironment, 
 	dealState, err := environment.GetProviderDealState(ctx.Context(), deal.ProposalCid)
 	if err != nil {
 		log.Warnf("error when querying provider deal state: %w", err) // TODO: at what point do we fail the deal?
-		return waitAgain(ctx, environment, true)
+		return waitAgain(ctx, environment, true, storagemarket.StorageDealUnknown)
 	}
 
 	if isFailed(dealState.State) {
@@ -190,16 +190,16 @@ func CheckForDealAcceptance(ctx fsm.Context, environment ClientDealEnvironment, 
 		return ctx.Trigger(storagemarket.ClientEventDealAccepted, dealState.PublishCid)
 	}
 
-	return waitAgain(ctx, environment, false)
+	return waitAgain(ctx, environment, false, dealState.State)
 }
 
-func waitAgain(ctx fsm.Context, environment ClientDealEnvironment, pollError bool) error {
+func waitAgain(ctx fsm.Context, environment ClientDealEnvironment, pollError bool, providerState storagemarket.StorageDealStatus) error {
 	t := time.NewTimer(environment.PollingInterval())
 
 	go func() {
 		select {
 		case <-t.C:
-			_ = ctx.Trigger(storagemarket.ClientEventWaitForDealState, pollError)
+			_ = ctx.Trigger(storagemarket.ClientEventWaitForDealState, pollError, providerState)
 		case <-ctx.Context().Done():
 			t.Stop()
 			return

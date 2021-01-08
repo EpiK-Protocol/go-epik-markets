@@ -1,6 +1,8 @@
 package clientstates
 
 import (
+	"fmt"
+
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
@@ -105,20 +107,36 @@ var ClientEvents = fsm.Events{
 		}),
 
 	fsm.Event(storagemarket.ClientEventDataTransferStalled).
-		From(storagemarket.StorageDealTransferring).ToJustRecord().Action(func(deal *storagemarket.ClientDeal) error {
-		deal.Message = "data transfer appears to be stalled. attempt restart"
-		return nil
-	}),
+		From(storagemarket.StorageDealTransferring).
+		To(storagemarket.StorageDealFailing).
+		Action(func(deal *storagemarket.ClientDeal, err error) error {
+			deal.Message = xerrors.Errorf("could not complete data transfer, could not connect to provider %s", deal.Miner).Error()
+			return nil
+		}),
+
+	fsm.Event(storagemarket.ClientEventDataTransferCancelled).
+		FromMany(
+			storagemarket.StorageDealStartDataTransfer,
+			storagemarket.StorageDealTransferring,
+			storagemarket.StorageDealClientTransferRestart,
+		).
+		To(storagemarket.StorageDealFailing).
+		Action(func(deal *storagemarket.ClientDeal) error {
+			deal.Message = "data transfer cancelled"
+			return nil
+		}),
 
 	fsm.Event(storagemarket.ClientEventDataTransferComplete).
-		FromMany(storagemarket.StorageDealTransferring, storagemarket.StorageDealStartDataTransfer).To(storagemarket.StorageDealCheckForAcceptance),
+		FromMany(storagemarket.StorageDealTransferring, storagemarket.StorageDealStartDataTransfer).
+		To(storagemarket.StorageDealCheckForAcceptance),
 	fsm.Event(storagemarket.ClientEventWaitForDealState).
 		From(storagemarket.StorageDealCheckForAcceptance).ToNoChange().
-		Action(func(deal *storagemarket.ClientDeal, pollError bool) error {
+		Action(func(deal *storagemarket.ClientDeal, pollError bool, providerState storagemarket.StorageDealStatus) error {
 			deal.PollRetryCount++
 			if pollError {
 				deal.PollErrorCount++
 			}
+			deal.Message = fmt.Sprintf("Provider state: %s", storagemarket.DealStates[providerState])
 			return nil
 		}),
 	fsm.Event(storagemarket.ClientEventResponseDealDidNotMatch).
@@ -137,6 +155,7 @@ var ClientEvents = fsm.Events{
 		From(storagemarket.StorageDealCheckForAcceptance).To(storagemarket.StorageDealProposalAccepted).
 		Action(func(deal *storagemarket.ClientDeal, publishMessage *cid.Cid) error {
 			deal.PublishMessage = publishMessage
+			deal.Message = ""
 			return nil
 		}),
 	fsm.Event(storagemarket.ClientEventStreamCloseError).
