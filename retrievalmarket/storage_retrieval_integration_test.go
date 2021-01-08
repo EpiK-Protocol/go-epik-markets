@@ -57,7 +57,7 @@ func TestStorageRetrieval(t *testing.T) {
 	err := sh.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 	assert.NoError(t, err)
 
-	result := sh.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: sh.PayloadCid}, false /* , false */)
+	result := sh.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: sh.PayloadCid}, false)
 	require.False(t, result.ProposalCid.Equals(cid.Undef))
 
 	time.Sleep(time.Millisecond * 200)

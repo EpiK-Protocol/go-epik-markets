@@ -45,12 +45,14 @@ require (
 	golang.org/x/exp v0.0.0-20200207192155-f17229e696bd
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
+	gotest.tools/gotestsum v0.6.0 // indirect
 )
 
 replace github.com/filecoin-project/go-fil-markets => ./
 
-replace github.com/filecoin-project/filecoin-ffi => github.com/EpiK-Protocol/go-epik-ffi v0.30.4-0.20201116140240-9647d22c3d8e
+// replace github.com/filecoin-project/filecoin-ffi => github.com/EpiK-Protocol/go-epik-ffi v0.30.4-0.20201116140240-9647d22c3d8e
+replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
 
 // replace github.com/filecoin-project/specs-actors/v2 v2.0.1 => ../go-epik-actors
 
-replace github.com/filecoin-project/specs-actors/v2 => github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20201219190015-f7cd77336688
+replace github.com/filecoin-project/specs-actors/v2 => github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210106111733-7f3bb5bb57b7

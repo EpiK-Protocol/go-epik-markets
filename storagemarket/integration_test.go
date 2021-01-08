@@ -82,7 +82,7 @@ func TestMakeDeal(t *testing.T) {
 			err := h.Provider.SetAsk( /* big.NewInt(0), big.NewInt(0), */ 50_000)
 			assert.NoError(t, err)
 
-			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, true /* , false */)
+			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, true)
 			proposalCid := result.ProposalCid
 
 			var providerSeenDeal storagemarket.MinerDeal
@@ -197,7 +197,7 @@ func TestMakeDealOffline(t *testing.T) {
 		PieceSize:    size,
 	}
 
-	result := h.ProposeStorageDeal(t, dataRef, false /* , false */)
+	result := h.ProposeStorageDeal(t, dataRef, false)
 	proposalCid := result.ProposalCid
 
 	wg := sync.WaitGroup{}
@@ -258,7 +258,7 @@ func TestMakeDealNonBlocking(t *testing.T) {
 	h.ClientNode.AddFundsCid = testCids[0]
 	shared_testutil.StartAndWaitForReady(ctx, t, h.Client)
 
-	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false /* , false */)
+	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false)
 
 	wg := sync.WaitGroup{}
 	h.WaitForClientEvent(&wg, storagemarket.ClientEventDataTransferComplete)
@@ -352,7 +352,7 @@ func TestRestartOnlyProviderDataTransfer(t *testing.T) {
 		}
 	})
 
-	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false /* , false */)
+	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false)
 	proposalCid := result.ProposalCid
 	t.Log("storage deal proposed")
 
@@ -551,7 +551,7 @@ func TestRestartClient(t *testing.T) {
 				})
 			}
 
-			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false /* , false */)
+			result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false)
 			proposalCid := result.ProposalCid
 			t.Log("storage deal proposed")
 
@@ -651,7 +651,7 @@ func TestCancelDataTransfer(t *testing.T) {
 			}
 		})
 
-		result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false, false)
+		result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false)
 		proposalCid := result.ProposalCid
 		t.Log("storage deal proposed")
 

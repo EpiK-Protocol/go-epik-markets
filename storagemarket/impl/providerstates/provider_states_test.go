@@ -26,7 +26,6 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-statemachine/fsm"
 	fsmtest "github.com/filecoin-project/go-statemachine/fsm/testutil"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	satesting "github.com/filecoin-project/specs-actors/v2/support/testing"
 
@@ -97,7 +96,7 @@ func TestValidateDealProposal(t *testing.T) {
 				require.Equal(t, "deal rejected: node error getting most recent state id: couldn't get id", deal.Message)
 			},
 		},
-		"PricePerEpoch too low": {
+		/* "PricePerEpoch too low": {
 			dealParams: dealParams{
 				StoragePricePerEpoch: abi.NewTokenAmount(5000),
 			},
@@ -105,7 +104,7 @@ func TestValidateDealProposal(t *testing.T) {
 				tut.AssertDealState(t, storagemarket.StorageDealRejecting, deal.State)
 				require.Equal(t, "deal rejected: storage price per epoch less than asking price: 5000 < 9765", deal.Message)
 			},
-		},
+		}, */
 		"PieceSize < MinPieceSize": {
 			dealParams: dealParams{
 				PieceSize: abi.PaddedPieceSize(128),
@@ -220,7 +219,7 @@ func TestValidateDealProposal(t *testing.T) {
 				require.Equal(t, "deal rejected: proposal PieceCID had wrong prefix", deal.Message)
 			},
 		},
-		"end epoch before start": {
+		/* "end epoch before start": {
 			dealParams: dealParams{
 				StartEpoch: 1000,
 				EndEpoch:   900,
@@ -229,7 +228,7 @@ func TestValidateDealProposal(t *testing.T) {
 				tut.AssertDealState(t, storagemarket.StorageDealRejecting, deal.State)
 				require.Equal(t, "deal rejected: proposal end before proposal start", deal.Message)
 			},
-		},
+		}, */
 		"start epoch has already passed": {
 			dealParams: dealParams{
 				StartEpoch: defaultHeight - 1,
@@ -239,7 +238,7 @@ func TestValidateDealProposal(t *testing.T) {
 				require.Equal(t, "deal rejected: deal start epoch has already elapsed", deal.Message)
 			},
 		},
-		"deal duration too short (less than 180 days)": {
+		/* "deal duration too short (less than 180 days)": {
 			dealParams: dealParams{
 				StartEpoch: defaultHeight,
 				EndEpoch:   defaultHeight + builtin.EpochsInDay*180 - 1,
@@ -261,7 +260,7 @@ func TestValidateDealProposal(t *testing.T) {
 				tut.AssertDealState(t, storagemarket.StorageDealRejecting, deal.State)
 				require.True(t, strings.Contains(deal.Message, "deal rejected: deal duration out of bounds"))
 			},
-		},
+		}, */
 	}
 	for test, data := range tests {
 		t.Run(test, func(t *testing.T) {
@@ -1137,22 +1136,22 @@ type nodeParams struct {
 }
 
 type dealParams struct {
-	PieceCid             *cid.Cid
-	PiecePath            filestore.Path
-	MetadataPath         filestore.Path
-	DealID               abi.DealID
-	DataRef              *storagemarket.DataRef
-	StoragePricePerEpoch abi.TokenAmount
-	ProviderCollateral   abi.TokenAmount
-	ClientCollateral     abi.TokenAmount
-	PieceSize            abi.PaddedPieceSize
-	StartEpoch           abi.ChainEpoch
-	EndEpoch             abi.ChainEpoch
-	FastRetrieval        bool
-	VerifiedDeal         bool
-	ReserveFunds         bool
-	TransferChannelId    *datatransfer.ChannelID
-	Label                string
+	PieceCid     *cid.Cid
+	PiecePath    filestore.Path
+	MetadataPath filestore.Path
+	DealID       abi.DealID
+	DataRef      *storagemarket.DataRef
+	// StoragePricePerEpoch abi.TokenAmount
+	ProviderCollateral abi.TokenAmount
+	ClientCollateral   abi.TokenAmount
+	PieceSize          abi.PaddedPieceSize
+	StartEpoch         abi.ChainEpoch
+	// EndEpoch           abi.ChainEpoch
+	FastRetrieval     bool
+	VerifiedDeal      bool
+	ReserveFunds      bool
+	TransferChannelId *datatransfer.ChannelID
+	Label             string
 }
 
 type environmentParams struct {
