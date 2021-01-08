@@ -14,7 +14,7 @@ require (
 	github.com/filecoin-project/go-statemachine v0.0.0-20200925024713-05bd7c71fbfe
 	github.com/filecoin-project/go-statestore v0.1.0
 	github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b
-	github.com/filecoin-project/specs-actors/v2 v2.2.0
+	github.com/filecoin-project/specs-actors/v2 v2.3.3
 	github.com/hannahhoward/cbor-gen-for v0.0.0-20200817222906-ea96cece81f1
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/ipfs/go-block-format v0.0.2
@@ -45,14 +45,10 @@ require (
 	golang.org/x/exp v0.0.0-20200207192155-f17229e696bd
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
-	gotest.tools/gotestsum v0.6.0 // indirect
 )
 
 replace github.com/filecoin-project/go-fil-markets => ./
 
-// replace github.com/filecoin-project/filecoin-ffi => github.com/EpiK-Protocol/go-epik-ffi v0.30.4-0.20201116140240-9647d22c3d8e
-replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
-
-// replace github.com/filecoin-project/specs-actors/v2 v2.0.1 => ../go-epik-actors
+replace github.com/filecoin-project/filecoin-ffi => github.com/EpiK-Protocol/go-epik-ffi v0.30.4-0.20210106120422-5c04c857a46c
 
 replace github.com/filecoin-project/specs-actors/v2 => github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210106111733-7f3bb5bb57b7
