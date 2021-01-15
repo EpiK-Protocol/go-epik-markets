@@ -1978,7 +1978,7 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{166}); err != nil {
+	if _, err := w.Write([]byte{165}); err != nil {
 		return err
 	}
 
@@ -2081,29 +2081,6 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 	if _, err := io.WriteString(w, string(t.Expert)); err != nil {
-		return err
-	}
-
-	// t.Bounty (string) (string)
-	if len("Bounty") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Bounty\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Bounty"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Bounty")); err != nil {
-		return err
-	}
-
-	if len(t.Bounty) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Bounty was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Bounty))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Bounty)); err != nil {
 		return err
 	}
 	return nil
@@ -2214,17 +2191,6 @@ func (t *DataRef) UnmarshalCBOR(r io.Reader) error {
 				}
 
 				t.Expert = string(sval)
-			}
-			// t.Bounty (string) (string)
-		case "Bounty":
-
-			{
-				sval, err := cbg.ReadStringBuf(br, scratch)
-				if err != nil {
-					return err
-				}
-
-				t.Bounty = string(sval)
 			}
 
 		default:

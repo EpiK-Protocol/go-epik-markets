@@ -185,7 +185,6 @@ type DataRef struct {
 	PieceSize abi.UnpaddedPieceSize // Optional for non-manual transfer, will be recomputed from the data if not given
 
 	Expert string
-	Bounty string
 }
 
 // ProviderDealState represents a Provider's current state of a deal
