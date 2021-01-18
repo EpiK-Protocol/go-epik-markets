@@ -43,7 +43,7 @@ type ClientStateEntryFunc func(ctx fsm.Context, environment ClientDealEnvironmen
 func ReserveClientFunds(ctx fsm.Context, environment ClientDealEnvironment, deal storagemarket.ClientDeal) error {
 	node := environment.Node()
 
-	mcid, err := node.ReserveFunds(ctx.Context(), deal.Proposal.Client, deal.Proposal.Client, big.Zero() /* deal.Proposal.ClientBalanceRequirement() */)
+	mcid, err := node.ReserveFunds(ctx.Context(), deal.Proposal.Client, deal.Proposal.Client, big.Zero() /* deal.Proposal.ClientBalanceRequirement() */) // TODO: remove it
 	if err != nil {
 		return ctx.Trigger(storagemarket.ClientEventReserveFundsFailed, err)
 	}

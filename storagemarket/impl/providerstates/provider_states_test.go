@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"strings"
 	"testing"
 
 	"github.com/ipfs/go-cid"
@@ -114,7 +113,7 @@ func TestValidateDealProposal(t *testing.T) {
 				require.Equal(t, "deal rejected: piece size less than minimum required size: 128 < 256", deal.Message)
 			},
 		},
-		"Get balance error": {
+		/* "Get balance error": {
 			nodeParams: nodeParams{
 				ClientMarketBalanceError: errors.New("could not get balance"),
 			},
@@ -144,7 +143,7 @@ func TestValidateDealProposal(t *testing.T) {
 				require.True(t, strings.Contains(deal.Message, "deal rejected: clientMarketBalance.Available too small"))
 			},
 		},
-		/* "verified deal succeeds": {
+		"verified deal succeeds": {
 			dealParams: dealParams{
 				VerifiedDeal: true,
 			},
@@ -421,7 +420,7 @@ func TestReserveProviderFunds(t *testing.T) {
 	eventProcessor, err := fsm.NewEventProcessor(storagemarket.MinerDeal{}, "State", providerstates.ProviderEvents)
 	require.NoError(t, err)
 	runReserveProviderFunds := makeExecutor(ctx, eventProcessor, providerstates.ReserveProviderFunds, storagemarket.StorageDealReserveProviderFunds)
-	cids := tut.GenerateCids(1)
+	// cids := tut.GenerateCids(1)
 	tests := map[string]struct {
 		nodeParams        nodeParams
 		dealParams        dealParams
@@ -438,7 +437,7 @@ func TestReserveProviderFunds(t *testing.T) {
 				/* require.Equal(t, deal.Proposal.ProviderBalanceRequirement(), deal.FundsReserved) */
 			},
 		},
-		"succeeds by sending an AddBalance message": {
+		/* "succeeds by sending an AddBalance message": {
 			dealParams: dealParams{
 				ProviderCollateral: abi.NewTokenAmount(1),
 			},
@@ -448,11 +447,11 @@ func TestReserveProviderFunds(t *testing.T) {
 			dealInspector: func(t *testing.T, deal storagemarket.MinerDeal, env *fakeEnvironment) {
 				tut.AssertDealState(t, storagemarket.StorageDealProviderFunding, deal.State)
 				require.Equal(t, &cids[0], deal.AddFundsCid)
-				/* require.Equal(t, env.node.DealFunds.ReserveCalls[0], deal.Proposal.ProviderBalanceRequirement()) */
+				require.Equal(t, env.node.DealFunds.ReserveCalls[0], deal.Proposal.ProviderBalanceRequirement())
 				require.Len(t, env.node.DealFunds.ReleaseCalls, 0)
-				/* require.Equal(t, deal.Proposal.ProviderBalanceRequirement(), deal.FundsReserved) */
+				require.Equal(t, deal.Proposal.ProviderBalanceRequirement(), deal.FundsReserved)
 			},
-		},
+		}, */
 		"get miner worker fails": {
 			nodeParams: nodeParams{
 				MinerWorkerError: errors.New("could not get worker"),

@@ -20,8 +20,8 @@ github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOv
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210115053302-2c6e26eaa514 h1:QgixSItS3gDn+OLWRohBASIx60qO+aQwwJD5c3aFbSM=
-github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210115053302-2c6e26eaa514/go.mod h1:lHfNv0IoCuKViCCGuLajvVaiNu+KGEgTLIZv+QaN7Ik=
+github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210118113406-64d529ab2998 h1:mNUjPbj1fnkOaIPNo+psqfD7RvK7TqCrpCOe5Vr0mas=
+github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210118113406-64d529ab2998/go.mod h1:lHfNv0IoCuKViCCGuLajvVaiNu+KGEgTLIZv+QaN7Ik=
 github.com/Kubuxu/go-os-helper v0.0.1/go.mod h1:N8B+I7vPCT80IcP58r50u4+gEEcsZETFUpAzWW2ep1Y=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/Stebalien/go-bitfield v0.0.1 h1:X3kbSSPUaJK60wV2hjOPZwmpljr6VGCqdq4cBLhbQBo=

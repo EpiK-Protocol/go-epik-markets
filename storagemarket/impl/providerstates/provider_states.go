@@ -237,7 +237,7 @@ func ReserveProviderFunds(ctx fsm.Context, environment ProviderDealEnvironment, 
 		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("looking up miner worker: %w", err))
 	}
 
-	mcid, err := node.ReserveFunds(ctx.Context(), waddr, deal.Proposal.Provider, big.Zero() /* deal.Proposal.ProviderCollateral */)
+	mcid, err := node.ReserveFunds(ctx.Context(), waddr, deal.Proposal.Provider, big.Zero() /* deal.Proposal.ProviderCollateral */) //TODO: remove it
 	if err != nil {
 		return ctx.Trigger(storagemarket.ProviderEventNodeErrored, xerrors.Errorf("reserving funds: %w", err))
 	}

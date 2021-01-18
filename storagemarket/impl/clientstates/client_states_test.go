@@ -46,7 +46,7 @@ func TestReserveClientFunds(t *testing.T) {
 		runAndInspect(t, storagemarket.StorageDealReserveClientFunds, clientstates.ReserveClientFunds, testCase{
 			nodeParams: nodeParams{AddFundsCid: tut.GenerateCids(1)[0]},
 			inspector: func(deal storagemarket.ClientDeal, env *fakeEnvironment) {
-				tut.AssertDealState(t, storagemarket.StorageDealClientFunding, deal.State)
+				tut.AssertDealState(t, storagemarket.StorageDealFundsReserved, deal.State)
 				/* assert.Equal(t, env.node.DealFunds.ReserveCalls[0], deal.Proposal.ClientBalanceRequirement()) */
 				assert.Len(t, env.node.DealFunds.ReleaseCalls, 0)
 				/* assert.Equal(t, deal.Proposal.ClientBalanceRequirement(), deal.FundsReserved) */

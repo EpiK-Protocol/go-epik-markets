@@ -279,7 +279,7 @@ func TestMakeDealNonBlocking(t *testing.T) {
 		providerDeals, err := h.Provider.ListLocalDeals()
 		assert.NoError(t, err)
 		pd = providerDeals[0]
-		return pd.State == storagemarket.StorageDealProviderFunding
+		return pd.State == storagemarket.StorageDealPublishing
 	}, 1*time.Second, 100*time.Millisecond, "actual deal status is %s", storagemarket.DealStates[pd.State])
 }
 
