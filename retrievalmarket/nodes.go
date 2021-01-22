@@ -18,6 +18,13 @@ import (
 type RetrievalClientNode interface {
 	GetChainHead(ctx context.Context) (shared.TipSetToken, abi.ChainEpoch, error)
 
+	// SubmitDataPledge submit data retrieval pledge
+	SubmitDataPledge(ctx context.Context, clientAddress, minerAddress address.Address,
+		pieceCid cid.Cid, size uint64) (cid.Cid, error)
+
+	// WaitForDataPledgeReady wait for data pledge ready
+	WaitForDataPledgeReady(ctx context.Context, waitSentinel cid.Cid) error
+
 	// GetOrCreatePaymentChannel sets up a new payment channel if one does not exist
 	// between a client and a miner and ensures the client has the given amount of funds available in the channel
 	GetOrCreatePaymentChannel(ctx context.Context, clientAddress, minerAddress address.Address,
@@ -52,4 +59,6 @@ type RetrievalProviderNode interface {
 	GetMinerWorkerAddress(ctx context.Context, miner address.Address, tok shared.TipSetToken) (address.Address, error)
 	UnsealSector(ctx context.Context, sectorID abi.SectorNumber, offset abi.UnpaddedPieceSize, length abi.UnpaddedPieceSize) (io.ReadCloser, error)
 	SavePaymentVoucher(ctx context.Context, paymentChannel address.Address, voucher *paych.SignedVoucher, proof []byte, expectedAmount abi.TokenAmount, tok shared.TipSetToken) (abi.TokenAmount, error)
+
+	ConfirmComplete(ctx context.Context, pieceCid cid.Cid, size uint64) (cid.Cid, error)
 }
