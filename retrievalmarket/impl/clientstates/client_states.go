@@ -179,5 +179,11 @@ func CheckComplete(ctx fsm.Context, environment ClientDealEnvironment, deal rm.C
 		return ctx.Trigger(rm.ClientEventEarlyTermination)
 	}
 
+	size := big.Div(deal.TotalFunds, deal.PricePerByte).Uint64()
+	_, err := environment.Node().ConfirmComplete(ctx.Context(), deal.ClientWallet, deal.MinerWallet, *deal.PieceCID, size)
+	if err != nil {
+		return ctx.Trigger(rm.ClientEventPaymentChannelErrored, err)
+	}
+
 	return ctx.Trigger(rm.ClientEventCompleteVerified)
 }

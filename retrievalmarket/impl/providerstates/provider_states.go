@@ -105,9 +105,9 @@ func CleanupDeal(ctx fsm.Context, environment ProviderDealEnvironment, deal rm.P
 		return ctx.Trigger(rm.ProviderEventMultiStoreError, err)
 	}
 
-	_, err = environment.Node().ConfirmComplete(ctx.Context(), *deal.PieceCID, deal.TotalSent)
-	if err != nil {
-		return ctx.Trigger(rm.ProviderEventDataTransferError, err)
-	}
+	// _, err = environment.Node().ConfirmComplete(ctx.Context(), *deal.PieceCID, deal.TotalSent)
+	// if err != nil {
+	// 	return ctx.Trigger(rm.ProviderEventDataTransferError, err)
+	// }
 	return ctx.Trigger(rm.ProviderEventCleanupComplete)
 }

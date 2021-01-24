@@ -25,6 +25,9 @@ type RetrievalClientNode interface {
 	// WaitForDataPledgeReady wait for data pledge ready
 	WaitForDataPledgeReady(ctx context.Context, waitSentinel cid.Cid) error
 
+	ConfirmComplete(ctx context.Context, clientAddress, minerAddress address.Address,
+		pieceCid cid.Cid, size uint64) (cid.Cid, error)
+
 	// GetOrCreatePaymentChannel sets up a new payment channel if one does not exist
 	// between a client and a miner and ensures the client has the given amount of funds available in the channel
 	GetOrCreatePaymentChannel(ctx context.Context, clientAddress, minerAddress address.Address,
