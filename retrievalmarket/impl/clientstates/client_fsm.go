@@ -318,4 +318,5 @@ var ClientStateEntryFuncs = fsm.StateEntryFuncs{
 	rm.DealStatusFailing:                      CancelDeal,
 	rm.DealStatusCancelling:                   CancelDeal,
 	rm.DealStatusCheckComplete:                CheckComplete,
+	rm.DealStatusFinalizing:                   Complete,
 }

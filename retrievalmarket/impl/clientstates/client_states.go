@@ -4,6 +4,7 @@ import (
 	"context"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-state-types/big"
@@ -40,6 +41,10 @@ func SetupPaymentChannelStart(ctx fsm.Context, environment ClientDealEnvironment
 	// 	return ctx.Trigger(rm.ClientEventPaymentChannelErrored, err)
 	// }
 
+	if deal.PieceCID == nil {
+		return ctx.Trigger(rm.DealStatusErrored, xerrors.Errorf("pieceid not found"))
+	}
+
 	size := big.Div(deal.TotalFunds, deal.PricePerByte).Uint64()
 	msgCID, err := environment.Node().SubmitDataPledge(ctx.Context(), deal.ClientWallet, deal.MinerWallet, *deal.PieceCID, size)
 	if err != nil {
@@ -64,7 +69,7 @@ func WaitPaymentChannelReady(ctx fsm.Context, environment ClientDealEnvironment,
 	if err != nil {
 		return ctx.Trigger(rm.ClientEventPaymentChannelErrored, err)
 	}
-	return ctx.Trigger(rm.ClientEventPaymentChannelReady, nil)
+	return ctx.Trigger(rm.ClientEventPaymentChannelReady, deal.ClientWallet)
 }
 
 // AllocateLane allocates a lane for this retrieval operation
@@ -73,7 +78,7 @@ func AllocateLane(ctx fsm.Context, environment ClientDealEnvironment, deal rm.Cl
 	// if err != nil {
 	// 	return ctx.Trigger(rm.ClientEventAllocateLaneErrored, err)
 	// }
-	return ctx.Trigger(rm.ClientEventLaneAllocated, nil)
+	return ctx.Trigger(rm.ClientEventLaneAllocated, uint64(0))
 }
 
 // Ongoing just double checks that we may need to move out of the ongoing state cause a payment was previously requested
@@ -124,15 +129,15 @@ func SendFunds(ctx fsm.Context, environment ClientDealEnvironment, deal rm.Clien
 	// 	return ctx.Trigger(rm.ClientEventCreateVoucherFailed, err)
 	// }
 
-	// // send payment voucher (or fail)
-	// err = environment.SendDataTransferVoucher(ctx.Context(), deal.ChannelID, &rm.DealPayment{
-	// 	ID:             deal.DealProposal.ID,
-	// 	PaymentChannel: deal.PaymentInfo.PayCh,
-	// 	PaymentVoucher: voucher,
-	// }, deal.LegacyProtocol)
-	// if err != nil {
-	// 	return ctx.Trigger(rm.ClientEventWriteDealPaymentErrored, err)
-	// }
+	// send payment voucher (or fail)
+	err := environment.SendDataTransferVoucher(ctx.Context(), deal.ChannelID, &rm.DealPayment{
+		ID:             deal.DealProposal.ID,
+		PaymentChannel: deal.PaymentInfo.PayCh,
+		PaymentVoucher: nil,
+	}, deal.LegacyProtocol)
+	if err != nil {
+		return ctx.Trigger(rm.ClientEventWriteDealPaymentErrored, err)
+	}
 
 	return ctx.Trigger(rm.ClientEventPaymentSent)
 }
@@ -179,11 +184,16 @@ func CheckComplete(ctx fsm.Context, environment ClientDealEnvironment, deal rm.C
 		return ctx.Trigger(rm.ClientEventEarlyTermination)
 	}
 
+	return ctx.Trigger(rm.ClientEventCompleteVerified)
+}
+
+// Complete complete the event
+func Complete(ctx fsm.Context, environment ClientDealEnvironment, deal rm.ClientDealState) error {
 	size := big.Div(deal.TotalFunds, deal.PricePerByte).Uint64()
 	_, err := environment.Node().ConfirmComplete(ctx.Context(), deal.ClientWallet, deal.MinerWallet, *deal.PieceCID, size)
 	if err != nil {
-		return ctx.Trigger(rm.ClientEventPaymentChannelErrored, err)
+		return ctx.Trigger(rm.DealStatusErrored, err)
 	}
 
-	return ctx.Trigger(rm.ClientEventCompleteVerified)
+	return nil
 }
