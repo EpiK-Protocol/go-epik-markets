@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -20,6 +21,8 @@ import (
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket/migrations"
 	"github.com/filecoin-project/go-fil-markets/shared"
 )
+
+var log = logging.Logger("requestvalidation")
 
 var allSelectorBytes []byte
 
@@ -72,8 +75,10 @@ func (rv *ProviderRequestValidator) ValidatePull(receiver peer.ID, voucher datat
 	}
 	response, err := rv.validatePull(receiver, proposal, legacyProtocol, baseCid, selector)
 	if response == nil {
+		log.Infof("ValidatePull (nil response): %w", err)
 		return nil, err
 	}
+	log.Infof("ValidatePull (return): id %d, status %d, msg %s, err %w", response.ID, response.Status, response.Message, err)
 	if legacyProtocol {
 		downgradedResponse := migrations.DealResponse0{
 			Status:      response.Status,
@@ -121,7 +126,7 @@ func (rv *ProviderRequestValidator) validatePull(receiver peer.ID, proposal *ret
 	if status == retrievalmarket.DealStatusFundsNeededUnseal {
 		response.PaymentOwed = pds.UnsealPrice
 	}
-
+	log.Infof("validatePull (after acceptDeal): status %d, deal %d, err %w", status, proposal.ID, err)
 	if err != nil {
 		response.Message = err.Error()
 		return &response, err
@@ -142,7 +147,7 @@ func (rv *ProviderRequestValidator) acceptDeal(deal *retrievalmarket.ProviderDea
 	if err != nil {
 		return retrievalmarket.DealStatusRejected, err
 	}
-
+	log.Infof("acceptDeal (run decision): deal %d", deal.ID)
 	accepted, reason, err := rv.env.RunDealDecisioningLogic(context.TODO(), *deal)
 	if err != nil {
 		return retrievalmarket.DealStatusErrored, err
@@ -150,7 +155,7 @@ func (rv *ProviderRequestValidator) acceptDeal(deal *retrievalmarket.ProviderDea
 	if !accepted {
 		return retrievalmarket.DealStatusRejected, errors.New(reason)
 	}
-
+	log.Infof("acceptDeal (get piece): %s", deal.PieceCID)
 	// verify we have the piece
 	pieceInfo, err := rv.env.GetPiece(deal.PayloadCID, deal.PieceCID)
 	if err != nil {
@@ -168,8 +173,9 @@ func (rv *ProviderRequestValidator) acceptDeal(deal *retrievalmarket.ProviderDea
 	}
 
 	if deal.UnsealPrice.GreaterThan(big.Zero()) {
+		log.Infof("acceptDeal (return fo unseal price): %s", deal.UnsealPrice)
 		return retrievalmarket.DealStatusFundsNeededUnseal, nil
 	}
-
+	log.Infof("acceptDeal (return)")
 	return retrievalmarket.DealStatusAccepted, nil
 }
