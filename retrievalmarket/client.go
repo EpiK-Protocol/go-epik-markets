@@ -24,6 +24,9 @@ type RetrievalClient interface {
 	// OnReady registers a listener for when the client comes on line
 	OnReady(shared.ReadyFunc)
 
+	// Stop ends deal processing
+	Stop() error
+
 	// Find Providers finds retrieval providers who may be storing a given piece
 	FindProviders(payloadCID cid.Cid) []RetrievalPeer
 
