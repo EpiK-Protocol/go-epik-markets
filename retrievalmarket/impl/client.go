@@ -3,6 +3,7 @@ package retrievalimpl
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/hannahhoward/go-pubsub"
 	"github.com/ipfs/go-cid"
@@ -313,6 +314,18 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 	if err != nil {
 		return 0, err
 	}
+
+	t := time.NewTimer(30 * time.Minute)
+
+	go func() {
+		select {
+		case <-t.C:
+			_ = c.stateMachines.Send(dealState.ID, retrievalmarket.ClientEventCancel)
+		case <-ctx.Done():
+			t.Stop()
+			return
+		}
+	}()
 
 	return dealID, nil
 }
