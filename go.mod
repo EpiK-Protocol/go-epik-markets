@@ -6,7 +6,7 @@ require (
 	github.com/filecoin-project/go-address v0.0.3
 	github.com/filecoin-project/go-cbor-util v0.0.0-20191219014500-08c40a1e63a2
 	github.com/filecoin-project/go-commp-utils v0.0.0-20201119054358-b88f7a96a434
-	github.com/filecoin-project/go-data-transfer v1.2.5
+	github.com/filecoin-project/go-data-transfer v1.2.7
 	github.com/filecoin-project/go-ds-versioning v0.1.0
 	github.com/filecoin-project/go-multistore v0.0.3
 	github.com/filecoin-project/go-padreader v0.0.0-20200903213702-ed5fae088b20
@@ -53,4 +53,4 @@ replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
 
 replace github.com/filecoin-project/specs-actors/v2 => github.com/EpiK-Protocol/go-epik-actors/v2 v2.0.0-20210203163055-f6bfa0ecc5a9
 
-replace github.com/filecoin-project/go-data-transfer v1.2.5 => github.com/EpiK-Protocol/go-data-transfer v1.1.1-0.20210206093030-b2ecef63ae01
+replace github.com/filecoin-project/go-data-transfer => github.com/EpiK-Protocol/go-data-transfer v1.1.1-0.20210218064751-b53c28fecbf2

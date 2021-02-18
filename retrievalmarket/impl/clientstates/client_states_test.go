@@ -146,6 +146,14 @@ func TestSetupPaymentChannel(t *testing.T) {
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFailing)
 	})
 
+	t.Run("payment channel skip if total funds is zero", func(t *testing.T) {
+		envParams := testnodes.TestRetrievalClientNodeParams{}
+		dealState := makeDealState(retrievalmarket.DealStatusAccepted)
+		dealState.TotalFunds = abi.NewTokenAmount(0)
+		runSetupPaymentChannel(t, envParams, dealState)
+		assert.Empty(t, dealState.Message)
+		assert.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
+	})
 }
 
 func TestWaitForPaymentReady(t *testing.T) {
@@ -548,12 +556,12 @@ func TestCancelDeal(t *testing.T) {
 		require.Equal(t, retrievalmarket.DealStatusCancelled, dealState.Status)
 	})
 }
+
 func TestCheckComplete(t *testing.T) {
 	ctx := context.Background()
 	eventMachine, err := fsm.NewEventProcessor(retrievalmarket.ClientDealState{}, "Status", clientstates.ClientEvents)
 	require.NoError(t, err)
-	runCheckComplete := func(t *testing.T,
-		dealState *retrievalmarket.ClientDealState) {
+	runCheckComplete := func(t *testing.T, dealState *retrievalmarket.ClientDealState) {
 		node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
 		environment := &fakeEnvironment{node, nil, nil, nil}
 		fsmCtx := fsmtest.NewTestContext(ctx, eventMachine)
@@ -575,6 +583,14 @@ func TestCheckComplete(t *testing.T) {
 		runCheckComplete(t, dealState)
 		require.Equal(t, retrievalmarket.DealStatusErrored, dealState.Status)
 		require.Equal(t, "Provider sent complete status without sending all data", dealState.Message)
+	})
+
+	t.Run("when not all blocks are received and deal price per byte is zero", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusCheckComplete)
+		dealState.PricePerByte = abi.NewTokenAmount(0)
+		dealState.AllBlocksReceived = false
+		runCheckComplete(t, dealState)
+		require.Equal(t, retrievalmarket.DealStatusClientWaitingForLastBlocks, dealState.Status)
 	})
 }
 

@@ -1,9 +1,7 @@
 package providerstates
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
@@ -285,63 +283,88 @@ func PublishDeal(ctx fsm.Context, environment ProviderDealEnvironment, deal stor
 	return ctx.Trigger(storagemarket.ProviderEventDealPublishInitiated, mcid)
 }
 
-// WaitForPublish waits for the publish message on chain and sends the deal id back to the client
+// WaitForPublish waits for the publish message on chain and saves the deal id
+// so it can be sent back to the client
 func WaitForPublish(ctx fsm.Context, environment ProviderDealEnvironment, deal storagemarket.MinerDeal) error {
-	return environment.Node().WaitForMessage(ctx.Context(), *deal.PublishCid, func(code exitcode.ExitCode, retBytes []byte, finalCid cid.Cid, err error) error {
-		if err != nil {
-			return ctx.Trigger(storagemarket.ProviderEventDealPublishError, xerrors.Errorf("PublishStorageDeals errored: %w", err))
-		}
-		if code != exitcode.Ok {
-			return ctx.Trigger(storagemarket.ProviderEventDealPublishError, xerrors.Errorf("PublishStorageDeals exit code: %s", code.String()))
-		}
-		var retval market.PublishStorageDealsReturn
-		err = retval.UnmarshalCBOR(bytes.NewReader(retBytes))
-		if err != nil {
-			return ctx.Trigger(storagemarket.ProviderEventDealPublishError, xerrors.Errorf("PublishStorageDeals error unmarshalling result: %w", err))
-		}
+	res, err := environment.Node().WaitForPublishDeals(ctx.Context(), *deal.PublishCid, deal.Proposal)
+	if err != nil {
+		return ctx.Trigger(storagemarket.ProviderEventDealPublishError, xerrors.Errorf("PublishStorageDeals errored: %w", err))
+	}
 
-		releaseReservedFunds(ctx, environment, deal)
+	// Once the deal has been published, release funds that were reserved
+	// for deal publishing
+	releaseReservedFunds(ctx, environment, deal)
 
-		return ctx.Trigger(storagemarket.ProviderEventDealPublished, retval.IDs[0], finalCid)
-	})
+	return ctx.Trigger(storagemarket.ProviderEventDealPublished, res.DealID, res.FinalCid)
 }
 
 // HandoffDeal hands off a published deal for sealing and commitment in a sector
 func HandoffDeal(ctx fsm.Context, environment ProviderDealEnvironment, deal storagemarket.MinerDeal) error {
-	var packingInfo *storagemarket.PackingResult
-	var packingErr error
-	if deal.PiecePath != filestore.Path("") {
-		file, err := environment.FileStore().Open(deal.PiecePath)
-		if err != nil {
-			return ctx.Trigger(storagemarket.ProviderEventFileStoreErrored, xerrors.Errorf("reading piece at path %s: %w", deal.PiecePath, err))
-		}
-		packingInfo, packingErr = handoffDeal(ctx.Context(), environment, deal, file, uint64(file.Size()))
-	} else {
-		pieceReader, pieceSize, err, writeErrChan := environment.GeneratePieceReader(deal.StoreID, deal.Ref.Root, shared.AllSelector())
-		if err != nil {
+	triggerHandoffFailed := func(err error, packingErr error) error {
+		if packingErr == nil {
 			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
 		}
-		packingInfo, packingErr = handoffDeal(ctx.Context(), environment, deal, pieceReader, pieceSize)
-		err = pieceReader.Close()
-		if err != nil {
-			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
-		}
-		select {
-		case <-ctx.Context().Done():
-			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, errors.New("write never finished"))
-		case err = <-writeErrChan:
-		}
-		if err != nil {
-			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
-		}
+		packingErr = xerrors.Errorf("packing error: %w", packingErr)
+		err = xerrors.Errorf("%s: %w", err, packingErr)
+		return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
 	}
 
-	if packingErr != nil {
-		return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, packingErr)
+	var packingInfo *storagemarket.PackingResult
+	if deal.PiecePath != "" {
+		// Data for offline deals is stored on disk, so if PiecePath is set,
+		// create a Reader from the file path
+		file, err := environment.FileStore().Open(deal.PiecePath)
+		if err != nil {
+			return ctx.Trigger(storagemarket.ProviderEventFileStoreErrored,
+				xerrors.Errorf("reading piece at path %s: %w", deal.PiecePath, err))
+		}
+
+		// Hand the deal off to the process that adds it to a sector
+		packingInfo, err = handoffDeal(ctx.Context(), environment, deal, file, uint64(file.Size()))
+		if err != nil {
+			err = xerrors.Errorf("packing piece at path %s: %w", deal.PiecePath, err)
+			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
+		}
+	} else {
+		// Create a reader to read the piece from the blockstore
+		pieceReader, pieceSize, err, writeErrChan := environment.GeneratePieceReader(deal.StoreID, deal.Ref.Root, shared.AllSelector())
+		if err != nil {
+			err := xerrors.Errorf("reading piece %s from store %d: %w", deal.Ref.PieceCid, deal.StoreID, err)
+			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
+		}
+
+		// Hand the deal off to the process that adds it to a sector
+		var packingErr error
+		packingInfo, packingErr = handoffDeal(ctx.Context(), environment, deal, pieceReader, pieceSize)
+
+		// Close the read side of the pipe
+		err = pieceReader.Close()
+		if err != nil {
+			err = xerrors.Errorf("closing reader for piece %s from store %d: %w", deal.Ref.PieceCid, deal.StoreID, err)
+			return triggerHandoffFailed(err, packingErr)
+		}
+
+		// Wait for the write to complete
+		select {
+		case <-ctx.Context().Done():
+			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed,
+				xerrors.Errorf("writing piece %s never finished: %w", deal.Ref.PieceCid, ctx.Context().Err()))
+		case err = <-writeErrChan:
+			if err != nil {
+				err = xerrors.Errorf("writing piece %s: %w", deal.Ref.PieceCid, err)
+				return triggerHandoffFailed(err, packingErr)
+			}
+		}
+
+		if packingErr != nil {
+			err = xerrors.Errorf("packing piece %s: %w", deal.Ref.PieceCid, packingErr)
+			return ctx.Trigger(storagemarket.ProviderEventDealHandoffFailed, err)
+		}
 	}
 
 	if err := recordPiece(environment, deal, packingInfo.SectorNumber, packingInfo.Offset, packingInfo.Size); err != nil {
-		log.Errorf("failed to register deal data for retrieval: %s", err)
+		err = xerrors.Errorf("failed to register deal data for piece %s for retrieval: %w", deal.Ref.PieceCid, err)
+		log.Error(err.Error())
 		_ = ctx.Trigger(storagemarket.ProviderEventPieceStoreErrored, err)
 	}
 
