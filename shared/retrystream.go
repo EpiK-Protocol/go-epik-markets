@@ -15,7 +15,7 @@ import (
 var log = logging.Logger("data_transfer_network")
 
 // The max number of attempts to open a stream
-const defaultMaxStreamOpenAttempts = 5
+const defaultMaxStreamOpenAttempts = 3
 
 // The min backoff time between retries
 const defaultMinAttemptDuration = 1 * time.Second

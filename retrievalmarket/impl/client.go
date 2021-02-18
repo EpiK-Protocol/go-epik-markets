@@ -3,6 +3,7 @@ package retrievalimpl
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/hannahhoward/go-pubsub"
 	"github.com/ipfs/go-cid"
@@ -151,6 +152,9 @@ func (c *Client) Start(ctx context.Context) error {
 		if err != nil {
 			log.Warnf("Publish retrieval client ready event: %s", err.Error())
 		}
+		if err := c.restartDeals(ctx); err != nil {
+			log.Errorf("Failed to restart retrieve deals: %w", err)
+		}
 	}()
 	return nil
 }
@@ -158,6 +162,38 @@ func (c *Client) Start(ctx context.Context) error {
 // OnReady registers a listener for when the client has finished starting up
 func (c *Client) OnReady(ready shared.ReadyFunc) {
 	c.readySub.Subscribe(ready)
+}
+
+func (c *Client) restartDeals(ctx context.Context) error {
+	var deals []retrievalmarket.ClientDealState
+	err := c.stateMachines.List(&deals)
+	if err != nil {
+		return err
+	}
+
+	for _, deal := range deals {
+		if c.stateMachines.IsTerminated(deal) {
+			continue
+		}
+
+		// err = c.addMultiaddrs(ctx, retrievalmarket.RetrievalPeer{Address: deal.MinerWallet,
+		// 	PieceCID: deal.PieceCID,
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+
+		err = c.stateMachines.Send(deal.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state restart error"))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Stop ends deal processing on a StorageClient
+func (c *Client) Stop() error {
+	return c.stateMachines.Stop(context.TODO())
 }
 
 // FindProviders uses PeerResolver interface to locate a list of providers who may have a given payload CID.
@@ -278,6 +314,18 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 	if err != nil {
 		return 0, err
 	}
+
+	t := time.NewTimer(30 * time.Minute)
+
+	go func() {
+		select {
+		case <-t.C:
+			_ = c.stateMachines.Send(dealState.ID, retrievalmarket.ClientEventCancel)
+		case <-ctx.Done():
+			t.Stop()
+			return
+		}
+	}()
 
 	return dealID, nil
 }
