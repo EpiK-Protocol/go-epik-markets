@@ -320,7 +320,8 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 	go func() {
 		select {
 		case <-t.C:
-			_ = c.stateMachines.Send(dealState.ID, retrievalmarket.ClientEventCancel)
+			_ = c.stateMachines.Send(dealState.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout"))
+			// _ = c.stateMachines.Send(dealState.ID, retrievalmarket.ClientEventCancel)
 		case <-ctx.Done():
 			t.Stop()
 			return
