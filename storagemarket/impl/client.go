@@ -372,6 +372,10 @@ func (c *Client) ProposeStorageDeal(ctx context.Context, params storagemarket.Pr
 	if err != nil {
 		return nil, xerrors.Errorf("signing deal proposal failed: %w", err)
 	}
+	clientDealProposal.DataRef = market.StorageDataRef {
+		RootCID: params.Data.Root,
+		Expert: params.Data.Expert,
+	}
 
 	proposalNd, err := cborutil.AsIpld(clientDealProposal)
 	if err != nil {
