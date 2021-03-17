@@ -225,7 +225,7 @@ func (c *Client) checkTimeOut() error {
 		v, _ := c.deals.Get(rk)
 		event := v.(*checkEvent)
 		if time.Now().Sub(event.start) > 30*time.Minute {
-			err := c.stateMachines.Send(event.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
+			err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
 			if err != nil {
 				return err
 			}
