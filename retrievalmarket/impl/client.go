@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hannahhoward/go-pubsub"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
@@ -46,10 +47,16 @@ type Client struct {
 	resolver             discovery.PeerResolver
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
+	deals                *lru.ARCCache
 }
 
 type internalEvent struct {
 	evt   retrievalmarket.ClientEvent
+	state retrievalmarket.ClientDealState
+}
+
+type checkEvent struct {
+	start time.Time
 	state retrievalmarket.ClientDealState
 }
 
@@ -78,6 +85,10 @@ func NewClient(
 	ds datastore.Batching,
 	storedCounter *storedcounter.StoredCounter,
 ) (retrievalmarket.RetrievalClient, error) {
+	deals, err := lru.NewARC(10000)
+	if err != nil {
+		panic(err)
+	}
 	c := &Client{
 		network:       network,
 		multiStore:    multiStore,
@@ -87,6 +98,7 @@ func NewClient(
 		storedCounter: storedCounter,
 		subscribers:   pubsub.New(dispatcher),
 		readySub:      pubsub.New(shared.ReadyDispatcher),
+		deals:         deals,
 	}
 	retrievalMigrations, err := migrations.ClientMigrations.Build()
 	if err != nil {
@@ -155,6 +167,8 @@ func (c *Client) Start(ctx context.Context) error {
 		if err := c.restartDeals(ctx); err != nil {
 			log.Errorf("Failed to restart retrieve deals: %w", err)
 		}
+
+		c.loop(ctx)
 	}()
 	return nil
 }
@@ -186,6 +200,36 @@ func (c *Client) restartDeals(ctx context.Context) error {
 		err = c.stateMachines.Send(deal.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state restart error"))
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) loop(ctx context.Context) error {
+	for {
+
+		ebt := time.NewTimer(time.Minute)
+		select {
+		case <-ctx.Done():
+			ebt.Stop()
+			return nil
+		case <-ebt.C:
+			c.checkTimeOut()
+		}
+	}
+}
+
+func (c *Client) checkTimeOut() error {
+	keys := c.deals.Keys()
+	for _, rk := range keys {
+		v, _ := c.deals.Get(rk)
+		event := v.(*checkEvent)
+		if time.Now().Sub(event.start) > 30*time.Minute {
+			err := c.stateMachines.Send(event.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
+			if err != nil {
+				return err
+			}
+			c.deals.Remove(rk)
 		}
 	}
 	return nil
@@ -315,17 +359,10 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 		return 0, err
 	}
 
-	t := time.NewTimer(30 * time.Minute)
-
-	go func() {
-		select {
-		case <-t.C:
-			_ = c.stateMachines.Send(dealState.ID, retrievalmarket.ClientEventCancel)
-		case <-ctx.Done():
-			t.Stop()
-			return
-		}
-	}()
+	c.deals.Add(dealID, &checkEvent{
+		start: time.Now(),
+		state: dealState,
+	})
 
 	return dealID, nil
 }
