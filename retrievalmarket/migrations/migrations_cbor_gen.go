@@ -10,7 +10,7 @@ import (
 	migrations "github.com/filecoin-project/go-fil-markets/piecestore/migrations"
 	retrievalmarket "github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	multistore "github.com/filecoin-project/go-multistore"
-	paych "github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	flowch "github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -737,7 +737,7 @@ func (t *DealPayment0) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.PaymentVoucher (paych.SignedVoucher) (struct)
+	// t.PaymentVoucher (flowch.SignedVoucher) (struct)
 	if err := t.PaymentVoucher.MarshalCBOR(w); err != nil {
 		return err
 	}
@@ -785,7 +785,7 @@ func (t *DealPayment0) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.PaymentVoucher (paych.SignedVoucher) (struct)
+	// t.PaymentVoucher (flowch.SignedVoucher) (struct)
 
 	{
 
@@ -797,7 +797,7 @@ func (t *DealPayment0) UnmarshalCBOR(r io.Reader) error {
 			if err := br.UnreadByte(); err != nil {
 				return err
 			}
-			t.PaymentVoucher = new(paych.SignedVoucher)
+			t.PaymentVoucher = new(flowch.SignedVoucher)
 			if err := t.PaymentVoucher.UnmarshalCBOR(br); err != nil {
 				return xerrors.Errorf("unmarshaling t.PaymentVoucher pointer: %w", err)
 			}

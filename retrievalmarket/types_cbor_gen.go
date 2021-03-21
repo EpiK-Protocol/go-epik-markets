@@ -9,7 +9,7 @@ import (
 
 	piecestore "github.com/filecoin-project/go-fil-markets/piecestore"
 	multistore "github.com/filecoin-project/go-multistore"
-	paych "github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	flowch "github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -1155,7 +1155,7 @@ func (t *DealPayment) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.PaymentVoucher (paych.SignedVoucher) (struct)
+	// t.PaymentVoucher (flowch.SignedVoucher) (struct)
 	if len("PaymentVoucher") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"PaymentVoucher\" was too long")
 	}
@@ -1231,7 +1231,7 @@ func (t *DealPayment) UnmarshalCBOR(r io.Reader) error {
 				}
 
 			}
-			// t.PaymentVoucher (paych.SignedVoucher) (struct)
+			// t.PaymentVoucher (flowch.SignedVoucher) (struct)
 		case "PaymentVoucher":
 
 			{
@@ -1244,7 +1244,7 @@ func (t *DealPayment) UnmarshalCBOR(r io.Reader) error {
 					if err := br.UnreadByte(); err != nil {
 						return err
 					}
-					t.PaymentVoucher = new(paych.SignedVoucher)
+					t.PaymentVoucher = new(flowch.SignedVoucher)
 					if err := t.PaymentVoucher.UnmarshalCBOR(br); err != nil {
 						return xerrors.Errorf("unmarshaling t.PaymentVoucher pointer: %w", err)
 					}

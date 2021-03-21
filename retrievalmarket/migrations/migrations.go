@@ -11,7 +11,7 @@ import (
 	"github.com/filecoin-project/go-ds-versioning/pkg/versioned"
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/piecestore"
 	piecemigrations "github.com/filecoin-project/go-fil-markets/piecestore/migrations"
@@ -145,7 +145,7 @@ func (dr *DealResponse0) Type() datatransfer.TypeIdentifier {
 type DealPayment0 struct {
 	ID             retrievalmarket.DealID
 	PaymentChannel address.Address
-	PaymentVoucher *paych.SignedVoucher
+	PaymentVoucher *flowch.SignedVoucher
 }
 
 // Type method makes DealPayment0 usable as a voucher

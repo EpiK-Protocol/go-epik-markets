@@ -9,7 +9,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/shared"
 )
@@ -17,16 +17,6 @@ import (
 // RetrievalClientNode are the node dependencies for a RetrievalClient
 type RetrievalClientNode interface {
 	GetChainHead(ctx context.Context) (shared.TipSetToken, abi.ChainEpoch, error)
-
-	// SubmitDataPledge submit data retrieval pledge
-	SubmitDataPledge(ctx context.Context, clientAddress, minerAddress address.Address,
-		pieceCid cid.Cid, size uint64) (cid.Cid, error)
-
-	// WaitForDataPledgeReady wait for data pledge ready
-	WaitForDataPledgeReady(ctx context.Context, waitSentinel cid.Cid) error
-
-	ConfirmComplete(ctx context.Context, clientAddress, minerAddress address.Address,
-		pieceCid cid.Cid, size uint64) (cid.Cid, error)
 
 	// GetOrCreatePaymentChannel sets up a new payment channel if one does not exist
 	// between a client and a miner and ensures the client has the given amount of funds available in the channel
@@ -45,7 +35,7 @@ type RetrievalClientNode interface {
 	// given payment channel so that all the payment vouchers in the lane add up
 	// to the given amount (so the payment voucher will be for the difference)
 	CreatePaymentVoucher(ctx context.Context, paymentChannel address.Address, amount abi.TokenAmount,
-		lane uint64, tok shared.TipSetToken) (*paych.SignedVoucher, error)
+		lane uint64, tok shared.TipSetToken) (*flowch.SignedVoucher, error)
 
 	// WaitForPaymentChannelReady just waits for the payment channel's pending operations to complete
 	WaitForPaymentChannelReady(ctx context.Context, waitSentinel cid.Cid) (address.Address, error)
@@ -61,7 +51,5 @@ type RetrievalProviderNode interface {
 	// returns the worker address associated with a miner
 	GetMinerWorkerAddress(ctx context.Context, miner address.Address, tok shared.TipSetToken) (address.Address, error)
 	UnsealSector(ctx context.Context, sectorID abi.SectorNumber, offset abi.UnpaddedPieceSize, length abi.UnpaddedPieceSize) (io.ReadCloser, error)
-	SavePaymentVoucher(ctx context.Context, paymentChannel address.Address, voucher *paych.SignedVoucher, proof []byte, expectedAmount abi.TokenAmount, tok shared.TipSetToken) (abi.TokenAmount, error)
-
-	ConfirmComplete(ctx context.Context, pieceCid cid.Cid, size uint64) (cid.Cid, error)
+	SavePaymentVoucher(ctx context.Context, paymentChannel address.Address, voucher *flowch.SignedVoucher, proof []byte, expectedAmount abi.TokenAmount, tok shared.TipSetToken) (abi.TokenAmount, error)
 }

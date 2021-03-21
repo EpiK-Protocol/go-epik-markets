@@ -18,7 +18,7 @@ import (
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/piecestore"
 )
@@ -53,6 +53,7 @@ type ClientDealState struct {
 	ChannelID            datatransfer.ChannelID
 	LastPaymentRequested bool
 	AllBlocksReceived    bool
+	TotalSize            uint64
 	TotalFunds           abi.TokenAmount
 	ClientWallet         address.Address
 	MinerWallet          address.Address
@@ -235,6 +236,7 @@ func IsTerminalStatus(status DealStatus) bool {
 // Params are the parameters requested for a retrieval deal proposal
 type Params struct {
 	Selector                *cbg.Deferred // V1
+	Size                    uint64
 	PieceCID                *cid.Cid
 	PricePerByte            abi.TokenAmount
 	PaymentInterval         uint64 // when to request payment
@@ -257,7 +259,7 @@ func NewParamsV0(pricePerByte abi.TokenAmount, paymentInterval uint64, paymentIn
 }
 
 // NewParamsV1 generates parameters for a retrieval deal, including a selector
-func NewParamsV1(pricePerByte abi.TokenAmount, paymentInterval uint64, paymentIntervalIncrease uint64, sel ipld.Node, pieceCid *cid.Cid, unsealPrice abi.TokenAmount) (Params, error) {
+func NewParamsV1(pricePerByte abi.TokenAmount, size uint64, paymentInterval uint64, paymentIntervalIncrease uint64, sel ipld.Node, pieceCid *cid.Cid, unsealPrice abi.TokenAmount) (Params, error) {
 	var buffer bytes.Buffer
 
 	if sel == nil {
@@ -272,6 +274,7 @@ func NewParamsV1(pricePerByte abi.TokenAmount, paymentInterval uint64, paymentIn
 	return Params{
 		Selector:                &cbg.Deferred{Raw: buffer.Bytes()},
 		PieceCID:                pieceCid,
+		Size:                    size,
 		PricePerByte:            pricePerByte,
 		PaymentInterval:         paymentInterval,
 		PaymentIntervalIncrease: paymentIntervalIncrease,
@@ -324,7 +327,7 @@ var DealResponseUndefined = DealResponse{}
 type DealPayment struct {
 	ID             DealID
 	PaymentChannel address.Address
-	PaymentVoucher *paych.SignedVoucher
+	PaymentVoucher *flowch.SignedVoucher
 }
 
 // Type method makes DealPayment usable as a voucher

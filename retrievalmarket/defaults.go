@@ -4,7 +4,7 @@ import "github.com/filecoin-project/go-state-types/abi"
 
 // DefaultPricePerByte is the charge per byte retrieved if the miner does
 // not specifically set it
-var DefaultPricePerByte = abi.NewTokenAmount(2)
+var DefaultPricePerByte = abi.NewTokenAmount(1)
 
 // DefaultUnsealPrice is the default charge to unseal a sector for retrieval
 var DefaultUnsealPrice = abi.NewTokenAmount(0)
