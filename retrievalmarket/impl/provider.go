@@ -247,7 +247,7 @@ func (p *Provider) checkTimeOut() error {
 		v, _ := p.checkEvents.Get(rk)
 		event := v.(*checkProviderEvent)
 		if time.Now().Sub(event.start) > 35*time.Minute {
-			err := p.stateMachines.Send(event.state.Identifier(), retrievalmarket.ProviderEventDataTransferError, xerrors.Errorf("provider deal data transfer failed: timeout"))
+			err := p.stateMachines.Send(event.state.Identifier(), retrievalmarket.ProviderEventClientCancelled)
 			if err != nil {
 				return err
 			}
