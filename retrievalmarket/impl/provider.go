@@ -3,8 +3,10 @@ package retrievalimpl
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/hannahhoward/go-pubsub"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
@@ -51,11 +53,17 @@ type Provider struct {
 	dealDecider          DealDecider
 	askStore             retrievalmarket.AskStore
 	disableNewDeals      bool
+	checkEvents          *lru.ARCCache
 }
 
 type internalProviderEvent struct {
 	evt   retrievalmarket.ProviderEvent
 	state retrievalmarket.ProviderDealState
+}
+
+type checkProviderEvent struct {
+	start time.Time
+	state *retrievalmarket.ProviderDealState
 }
 
 func providerDispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
@@ -98,6 +106,11 @@ func NewProvider(minerAddress address.Address,
 	opts ...RetrievalProviderOption,
 ) (retrievalmarket.RetrievalProvider, error) {
 
+	checkEvents, cerr := lru.NewARC(10000)
+	if cerr != nil {
+		return nil, cerr
+	}
+
 	p := &Provider{
 		multiStore:   multiStore,
 		dataTransfer: dataTransfer,
@@ -107,6 +120,7 @@ func NewProvider(minerAddress address.Address,
 		pieceStore:   pieceStore,
 		subscribers:  pubsub.New(providerDispatcher),
 		readySub:     pubsub.New(shared.ReadyDispatcher),
+		checkEvents:  checkEvents,
 	}
 
 	err := shared.MoveKey(ds, "retrieval-ask", "retrieval-ask/latest")
@@ -207,8 +221,40 @@ func (p *Provider) Start(ctx context.Context) error {
 		if err != nil {
 			log.Warnf("Publish retrieval provider ready event: %s", err.Error())
 		}
+
+		p.loop(ctx)
 	}()
 	return p.network.SetDelegate(p)
+}
+
+func (p *Provider) loop(ctx context.Context) error {
+	for {
+
+		ebt := time.NewTimer(time.Minute)
+		select {
+		case <-ctx.Done():
+			ebt.Stop()
+			return nil
+		case <-ebt.C:
+			p.checkTimeOut()
+		}
+	}
+}
+
+func (p *Provider) checkTimeOut() error {
+	keys := p.checkEvents.Keys()
+	for _, rk := range keys {
+		v, _ := p.checkEvents.Get(rk)
+		event := v.(*checkProviderEvent)
+		if time.Now().Sub(event.start) > 35*time.Minute {
+			err := p.stateMachines.Send(event.state.Identifier(), retrievalmarket.ProviderEventDataTransferError, xerrors.Errorf("provider deal data transfer failed: timeout"))
+			if err != nil {
+				return err
+			}
+			p.checkEvents.Remove(rk)
+		}
+	}
+	return nil
 }
 
 // OnReady registers a listener for when the provider has finished starting up

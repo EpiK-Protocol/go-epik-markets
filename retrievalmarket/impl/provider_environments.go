@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -74,7 +75,15 @@ func (pve *providerValidationEnvironment) BeginTracking(pds retrievalmarket.Prov
 		return pve.p.stateMachines.Send(pds.Identifier(), retrievalmarket.ProviderEventPaymentRequested, uint64(0))
 	}
 
-	return pve.p.stateMachines.Send(pds.Identifier(), retrievalmarket.ProviderEventOpen)
+	err = pve.p.stateMachines.Send(pds.Identifier(), retrievalmarket.ProviderEventOpen)
+	if err != nil {
+		return err
+	}
+	pve.p.checkEvents.Add(pds.Identifier(), &checkProviderEvent{
+		start: time.Now(),
+		state: &pds,
+	})
+	return nil
 }
 
 // NextStoreID allocates a store for this deal

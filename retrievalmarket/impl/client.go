@@ -47,7 +47,7 @@ type Client struct {
 	resolver             discovery.PeerResolver
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
-	deals                *lru.ARCCache
+	checkEvents          *lru.ARCCache
 }
 
 type internalEvent struct {
@@ -57,7 +57,7 @@ type internalEvent struct {
 
 type checkEvent struct {
 	start time.Time
-	state retrievalmarket.ClientDealState
+	state *retrievalmarket.ClientDealState
 }
 
 func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
@@ -85,9 +85,9 @@ func NewClient(
 	ds datastore.Batching,
 	storedCounter *storedcounter.StoredCounter,
 ) (retrievalmarket.RetrievalClient, error) {
-	deals, err := lru.NewARC(10000)
+	checkEvents, err := lru.NewARC(10000)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	c := &Client{
 		network:       network,
@@ -98,7 +98,7 @@ func NewClient(
 		storedCounter: storedCounter,
 		subscribers:   pubsub.New(dispatcher),
 		readySub:      pubsub.New(shared.ReadyDispatcher),
-		deals:         deals,
+		checkEvents:   checkEvents,
 	}
 	retrievalMigrations, err := migrations.ClientMigrations.Build()
 	if err != nil {
@@ -220,16 +220,17 @@ func (c *Client) loop(ctx context.Context) error {
 }
 
 func (c *Client) checkTimeOut() error {
-	keys := c.deals.Keys()
+	keys := c.checkEvents.Keys()
 	for _, rk := range keys {
-		v, _ := c.deals.Get(rk)
+		v, _ := c.checkEvents.Get(rk)
 		event := v.(*checkEvent)
 		if time.Now().Sub(event.start) > 30*time.Minute {
-			err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
+			// err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
+			err := c.CancelDeal(event.state.ID)
 			if err != nil {
 				return err
 			}
-			c.deals.Remove(rk)
+			c.checkEvents.Remove(rk)
 		}
 	}
 	return nil
@@ -359,9 +360,9 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 		return 0, err
 	}
 
-	c.deals.Add(dealID, &checkEvent{
+	c.checkEvents.Add(dealID, &checkEvent{
 		start: time.Now(),
-		state: dealState,
+		state: &dealState,
 	})
 
 	return dealID, nil
