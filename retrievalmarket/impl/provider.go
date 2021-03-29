@@ -222,7 +222,7 @@ func (p *Provider) Start(ctx context.Context) error {
 			log.Warnf("Publish retrieval provider ready event: %s", err.Error())
 		}
 
-		p.loop(ctx)
+		go p.loop(ctx)
 	}()
 	return p.network.SetDelegate(p)
 }

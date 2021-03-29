@@ -168,7 +168,7 @@ func (c *Client) Start(ctx context.Context) error {
 			log.Errorf("Failed to restart retrieve deals: %w", err)
 		}
 
-		c.loop(ctx)
+		go c.loop(ctx)
 	}()
 	return nil
 }
