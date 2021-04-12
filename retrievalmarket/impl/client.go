@@ -224,15 +224,19 @@ func (c *Client) checkTimeOut() error {
 	for _, rk := range keys {
 		v, _ := c.checkEvents.Get(rk)
 		event := v.(*checkEvent)
-		if time.Now().Sub(event.start) > 30*time.Minute {
-			// err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
-			if !retrievalmarket.IsTerminalStatus(event.state.Status) {
+		if event.state.Status == retrievalmarket.DealStatusErrored ||
+			event.state.Status == retrievalmarket.DealStatusCancelled ||
+			retrievalmarket.IsTerminalStatus(event.state.Status) {
+			c.checkEvents.Remove(rk)
+		} else {
+			if time.Now().Sub(event.start) > 30*time.Minute {
+				// err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
 				err := c.CancelDeal(event.state.ID)
 				if err != nil {
 					return err
 				}
+				c.checkEvents.Remove(rk)
 			}
-			c.checkEvents.Remove(rk)
 		}
 	}
 	return nil

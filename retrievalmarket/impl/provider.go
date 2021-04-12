@@ -246,14 +246,18 @@ func (p *Provider) checkTimeOut() error {
 	for _, rk := range keys {
 		v, _ := p.checkEvents.Get(rk)
 		event := v.(*checkProviderEvent)
-		if time.Now().Sub(event.start) > 35*time.Minute {
-			if !retrievalmarket.IsTerminalStatus(event.state.Status) {
+		if event.state.Status == retrievalmarket.DealStatusErrored ||
+			event.state.Status == retrievalmarket.DealStatusCancelled ||
+			retrievalmarket.IsTerminalStatus(event.state.Status) {
+			p.checkEvents.Remove(rk)
+		} else {
+			if time.Now().Sub(event.start) > 35*time.Minute {
 				err := p.stateMachines.Send(event.state.Identifier(), retrievalmarket.ProviderEventClientCancelled)
 				if err != nil {
 					return err
 				}
+				p.checkEvents.Remove(rk)
 			}
-			p.checkEvents.Remove(rk)
 		}
 	}
 	return nil
@@ -341,34 +345,41 @@ func (p *Provider) HandleQueryStream(stream rmnet.RetrievalQueryStream) {
 		return
 	}
 
-	paymentAddress, err := p.node.GetMinerWorkerAddress(ctx, p.minerAddress, tok)
-	if err != nil {
-		log.Errorf("Retrieval query: Lookup Payment Address: %s", err)
-		answer.Status = retrievalmarket.QueryResponseError
-		answer.Message = err.Error()
+	if p.checkEvents.Len() > retrievalmarket.MaxRetrieveParallelNum {
+		log.Errorf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
+		answer.Status = retrievalmarket.QueryResponseUnavailable
+		answer.Message = "out of max parallel number"
 	} else {
-		answer.PaymentAddress = paymentAddress
-
-		pieceCID := cid.Undef
-		if query.PieceCID != nil {
-			pieceCID = *query.PieceCID
-		}
-		pieceInfo, err := getPieceInfoFromCid(p.pieceStore, query.PayloadCID, pieceCID)
-
-		if err == nil && len(pieceInfo.Deals) > 0 {
-			answer.Status = retrievalmarket.QueryResponseAvailable
-			// TODO: get price, look for already unsealed ref to reduce work
-			answer.Size = uint64(pieceInfo.Deals[0].Length) // TODO: verify on intermediate
-			answer.PieceCIDFound = retrievalmarket.QueryItemAvailable
-		}
-
-		if err != nil && !xerrors.Is(err, retrievalmarket.ErrNotFound) {
-			log.Errorf("Retrieval query: GetRefs: %s", err)
+		paymentAddress, err := p.node.GetMinerWorkerAddress(ctx, p.minerAddress, tok)
+		if err != nil {
+			log.Errorf("Retrieval query: Lookup Payment Address: %s", err)
 			answer.Status = retrievalmarket.QueryResponseError
 			answer.Message = err.Error()
-		}
+		} else {
+			answer.PaymentAddress = paymentAddress
 
+			pieceCID := cid.Undef
+			if query.PieceCID != nil {
+				pieceCID = *query.PieceCID
+			}
+			pieceInfo, err := getPieceInfoFromCid(p.pieceStore, query.PayloadCID, pieceCID)
+
+			if err == nil && len(pieceInfo.Deals) > 0 {
+				answer.Status = retrievalmarket.QueryResponseAvailable
+				// TODO: get price, look for already unsealed ref to reduce work
+				answer.Size = uint64(pieceInfo.Deals[0].Length) // TODO: verify on intermediate
+				answer.PieceCIDFound = retrievalmarket.QueryItemAvailable
+			}
+
+			if err != nil && !xerrors.Is(err, retrievalmarket.ErrNotFound) {
+				log.Errorf("Retrieval query: GetRefs: %s", err)
+				answer.Status = retrievalmarket.QueryResponseError
+				answer.Message = err.Error()
+			}
+
+		}
 	}
+
 	if err := stream.WriteQueryResponse(answer); err != nil {
 		log.Errorf("Retrieval query: WriteCborRPC: %s", err)
 		return

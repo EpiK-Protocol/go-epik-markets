@@ -32,6 +32,9 @@ const QueryProtocolID = protocol.ID("/epk/retrieval/qry/1.0.0")
 // OldQueryProtocolID is the old query protocol for tuple structs
 const OldQueryProtocolID = protocol.ID("/epk/retrieval/qry/0.0.1")
 
+// MaxRetrieveParallelNum max Parallel number
+const MaxRetrieveParallelNum = 32
+
 // Unsubscribe is a function that unsubscribes a subscriber for either the
 // client or the provider
 type Unsubscribe func()
