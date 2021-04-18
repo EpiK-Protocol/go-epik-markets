@@ -79,10 +79,11 @@ func (pve *providerValidationEnvironment) BeginTracking(pds retrievalmarket.Prov
 	if err != nil {
 		return err
 	}
-	pve.p.checkEvents.Add(pds.Identifier(), &checkProviderEvent{
-		start: time.Now(),
-		state: &pds,
+	pve.p.checkEvents.Add(pds.ID, &checkProviderEvent{
+		start:      time.Now(),
+		identifier: pds.Identifier(),
 	})
+	log.Infof("retrievel provider open deal ID: %v, receiver:%v", pds.ID, pds.Receiver)
 	return nil
 }
 

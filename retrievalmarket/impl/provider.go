@@ -54,6 +54,7 @@ type Provider struct {
 	askStore             retrievalmarket.AskStore
 	disableNewDeals      bool
 	checkEvents          *lru.ARCCache
+	validateTime         time.Time
 }
 
 type internalProviderEvent struct {
@@ -62,8 +63,8 @@ type internalProviderEvent struct {
 }
 
 type checkProviderEvent struct {
-	start time.Time
-	state *retrievalmarket.ProviderDealState
+	start      time.Time
+	identifier retrievalmarket.ProviderDealIdentifier
 }
 
 func providerDispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
@@ -106,7 +107,7 @@ func NewProvider(minerAddress address.Address,
 	opts ...RetrievalProviderOption,
 ) (retrievalmarket.RetrievalProvider, error) {
 
-	checkEvents, cerr := lru.NewARC(10000)
+	checkEvents, cerr := lru.NewARC(2 * retrievalmarket.MaxRetrieveParallelNum)
 	if cerr != nil {
 		return nil, cerr
 	}
@@ -121,6 +122,7 @@ func NewProvider(minerAddress address.Address,
 		subscribers:  pubsub.New(providerDispatcher),
 		readySub:     pubsub.New(shared.ReadyDispatcher),
 		checkEvents:  checkEvents,
+		validateTime: time.Now().Add(5 * time.Minute),
 	}
 
 	err := shared.MoveKey(ds, "retrieval-ask", "retrieval-ask/latest")
@@ -217,6 +219,9 @@ func (p *Provider) Start(ctx context.Context) error {
 		if err != nil {
 			log.Errorf("Migrating retrieval provider state machines: %s", err.Error())
 		}
+		if err := p.restartDeals(ctx); err != nil {
+			log.Errorf("Failed to restart retrieve provider deals: %w", err)
+		}
 		err = p.readySub.Publish(err)
 		if err != nil {
 			log.Warnf("Publish retrieval provider ready event: %s", err.Error())
@@ -225,6 +230,22 @@ func (p *Provider) Start(ctx context.Context) error {
 		go p.loop(ctx)
 	}()
 	return p.network.SetDelegate(p)
+}
+
+func (p *Provider) restartDeals(ctx context.Context) error {
+	deals := p.ListDeals()
+	for _, deal := range deals {
+		if p.stateMachines.IsTerminated(deal) {
+			continue
+		}
+
+		err := p.stateMachines.Send(deal.Identifier(), retrievalmarket.ProviderEventClientCancelled)
+		if err != nil {
+			return err
+		}
+		log.Warnf("change retrieve provider deal status when restart: %v", deal.Identifier())
+	}
+	return nil
 }
 
 func (p *Provider) loop(ctx context.Context) error {
@@ -243,20 +264,27 @@ func (p *Provider) loop(ctx context.Context) error {
 
 func (p *Provider) checkTimeOut() error {
 	keys := p.checkEvents.Keys()
+	// log.Warnf("retrievel provider check timeout: %d", len(keys))
 	for _, rk := range keys {
 		v, _ := p.checkEvents.Get(rk)
 		event := v.(*checkProviderEvent)
-		if event.state.Status == retrievalmarket.DealStatusErrored ||
-			event.state.Status == retrievalmarket.DealStatusCancelled ||
-			retrievalmarket.IsTerminalStatus(event.state.Status) {
+		var deal retrievalmarket.ProviderDealState
+		err := p.stateMachines.GetSync(context.TODO(), event.identifier, &deal)
+		if err != nil {
+			return err
+		}
+
+		if p.stateMachines.IsTerminated(deal) {
 			p.checkEvents.Remove(rk)
+			log.Warnf("retrievel provider timeout check remove check events: %s, status:%d", rk, deal.Status)
 		} else {
 			if time.Now().Sub(event.start) > 35*time.Minute {
-				err := p.stateMachines.Send(event.state.Identifier(), retrievalmarket.ProviderEventClientCancelled)
+				err := p.stateMachines.Send(deal.Identifier(), retrievalmarket.ProviderEventClientCancelled)
 				if err != nil {
 					return err
 				}
 				p.checkEvents.Remove(rk)
+				log.Warnf("retrievel provider timeout check events: %s, status:%d", rk, deal.Status)
 			}
 		}
 	}
@@ -299,6 +327,7 @@ func (p *Provider) ListDeals() map[retrievalmarket.ProviderDealIdentifier]retrie
 	_ = p.stateMachines.List(&deals)
 	dealMap := make(map[retrievalmarket.ProviderDealIdentifier]retrievalmarket.ProviderDealState)
 	for _, deal := range deals {
+		// log.Warnf("provider list retrieve deals: %v, %v, %v", deal.ID, deal.Receiver, deal.Status)
 		dealMap[retrievalmarket.ProviderDealIdentifier{Receiver: deal.Receiver, DealID: deal.ID}] = deal
 	}
 	return dealMap
@@ -345,38 +374,44 @@ func (p *Provider) HandleQueryStream(stream rmnet.RetrievalQueryStream) {
 		return
 	}
 
-	if p.checkEvents.Len() > retrievalmarket.MaxRetrieveParallelNum {
-		log.Errorf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
-		answer.Status = retrievalmarket.QueryResponseUnavailable
-		answer.Message = "out of max parallel number"
+	paymentAddress, err := p.node.GetMinerWorkerAddress(ctx, p.minerAddress, tok)
+	if err != nil {
+		log.Errorf("Retrieval query: Lookup Payment Address: %s", err)
+		answer.Status = retrievalmarket.QueryResponseError
+		answer.Message = err.Error()
 	} else {
-		paymentAddress, err := p.node.GetMinerWorkerAddress(ctx, p.minerAddress, tok)
-		if err != nil {
-			log.Errorf("Retrieval query: Lookup Payment Address: %s", err)
+		answer.PaymentAddress = paymentAddress
+
+		pieceCID := cid.Undef
+		if query.PieceCID != nil {
+			pieceCID = *query.PieceCID
+		}
+		pieceInfo, err := getPieceInfoFromCid(p.pieceStore, query.PayloadCID, pieceCID)
+
+		if err == nil && len(pieceInfo.Deals) > 0 {
+			answer.Status = retrievalmarket.QueryResponseAvailable
+			// TODO: get price, look for already unsealed ref to reduce work
+			answer.Size = uint64(pieceInfo.Deals[0].Length) // TODO: verify on intermediate
+			answer.PieceCIDFound = retrievalmarket.QueryItemAvailable
+		}
+
+		if err != nil && !xerrors.Is(err, retrievalmarket.ErrNotFound) {
+			log.Errorf("Retrieval query: GetRefs: %s", err)
 			answer.Status = retrievalmarket.QueryResponseError
 			answer.Message = err.Error()
-		} else {
-			answer.PaymentAddress = paymentAddress
+		}
+	}
 
-			pieceCID := cid.Undef
-			if query.PieceCID != nil {
-				pieceCID = *query.PieceCID
-			}
-			pieceInfo, err := getPieceInfoFromCid(p.pieceStore, query.PayloadCID, pieceCID)
-
-			if err == nil && len(pieceInfo.Deals) > 0 {
-				answer.Status = retrievalmarket.QueryResponseAvailable
-				// TODO: get price, look for already unsealed ref to reduce work
-				answer.Size = uint64(pieceInfo.Deals[0].Length) // TODO: verify on intermediate
-				answer.PieceCIDFound = retrievalmarket.QueryItemAvailable
-			}
-
-			if err != nil && !xerrors.Is(err, retrievalmarket.ErrNotFound) {
-				log.Errorf("Retrieval query: GetRefs: %s", err)
-				answer.Status = retrievalmarket.QueryResponseError
-				answer.Message = err.Error()
-			}
-
+	if time.Now().Before(p.validateTime) {
+		// log.Warnf("Retrieval query: retrieve not available.")
+		answer.Status = retrievalmarket.QueryResponseUnavailable
+		answer.Message = "retrieve not available"
+	} else {
+		// log.Infof("Retrieval query: parallel number: %d", p.checkEvents.Len())
+		if p.checkEvents.Len() > retrievalmarket.MaxRetrieveParallelNum {
+			// log.Warnf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
+			answer.Status = retrievalmarket.QueryResponseUnavailable
+			answer.Message = "out of max parallel number"
 		}
 	}
 

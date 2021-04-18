@@ -51,7 +51,7 @@ var ClientEvents = fsm.Events{
 
 	// Initial deal acceptance events
 	fsm.Event(rm.ClientEventDealRejected).
-		From(rm.DealStatusWaitForAcceptance).To(rm.DealStatusRetryLegacy).
+		From(rm.DealStatusWaitForAcceptance).To(rm.DealStatusRejected).
 		From(rm.DealStatusWaitForAcceptanceLegacy).To(rm.DealStatusRejected).
 		Action(func(deal *rm.ClientDealState, message string) error {
 			deal.Message = fmt.Sprintf("deal rejected: %s", message)

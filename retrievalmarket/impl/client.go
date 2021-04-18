@@ -56,8 +56,8 @@ type internalEvent struct {
 }
 
 type checkEvent struct {
-	start time.Time
-	state *retrievalmarket.ClientDealState
+	start  time.Time
+	dealID retrievalmarket.DealID
 }
 
 func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
@@ -160,12 +160,12 @@ func (c *Client) Start(ctx context.Context) error {
 		if err != nil {
 			log.Errorf("Migrating retrieval client state machines: %s", err.Error())
 		}
+		if err := c.restartDeals(ctx); err != nil {
+			log.Errorf("Failed to restart retrieve deals: %w", err)
+		}
 		err = c.readySub.Publish(err)
 		if err != nil {
 			log.Warnf("Publish retrieval client ready event: %s", err.Error())
-		}
-		if err := c.restartDeals(ctx); err != nil {
-			log.Errorf("Failed to restart retrieve deals: %w", err)
 		}
 
 		go c.loop(ctx)
@@ -197,7 +197,8 @@ func (c *Client) restartDeals(ctx context.Context) error {
 		// 	return err
 		// }
 
-		err = c.stateMachines.Send(deal.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state restart error"))
+		// err = c.stateMachines.Send(deal.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal data transfer stalled (client restart)"))
+		err := c.CancelDeal(deal.ID)
 		if err != nil {
 			return err
 		}
@@ -224,18 +225,23 @@ func (c *Client) checkTimeOut() error {
 	for _, rk := range keys {
 		v, _ := c.checkEvents.Get(rk)
 		event := v.(*checkEvent)
-		if event.state.Status == retrievalmarket.DealStatusErrored ||
-			event.state.Status == retrievalmarket.DealStatusCancelled ||
-			retrievalmarket.IsTerminalStatus(event.state.Status) {
+		var deal retrievalmarket.ClientDealState
+		err := c.stateMachines.GetSync(context.TODO(), event.dealID, &deal)
+		if err != nil {
+			return err
+		}
+		if c.stateMachines.IsTerminated(deal) {
 			c.checkEvents.Remove(rk)
+			log.Warnf("retrievel client remove check events: %s, status:%d", rk, deal.Status)
 		} else {
 			if time.Now().Sub(event.start) > 30*time.Minute {
 				// err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
-				err := c.CancelDeal(event.state.ID)
+				err := c.CancelDeal(deal.ID)
 				if err != nil {
 					return err
 				}
 				c.checkEvents.Remove(rk)
+				log.Warnf("retrievel client timeout check events: %s, status:%d", rk, deal.Status)
 			}
 		}
 	}
@@ -367,8 +373,8 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 	}
 
 	c.checkEvents.Add(dealID, &checkEvent{
-		start: time.Now(),
-		state: &dealState,
+		start:  time.Now(),
+		dealID: dealID,
 	})
 
 	return dealID, nil
