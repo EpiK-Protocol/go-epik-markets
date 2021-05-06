@@ -59,7 +59,7 @@ func SetupPaymentChannelStart(ctx fsm.Context, environment ClientDealEnvironment
 
 	// return ctx.Trigger(rm.ClientEventPaymentChannelCreateInitiated, msgCID)
 
-	paych, msgCID, err := environment.Node().GetOrCreatePaymentChannel(ctx.Context(), deal.ClientWallet, deal.MinerWallet, big.NewIntUnsigned(deal.TotalSize), tok)
+	paych, msgCID, err := environment.Node().GetOrCreatePaymentChannel(ctx.Context(), deal.ClientWallet, deal.MinerWallet, deal.TotalFunds, tok)
 
 	if paych == address.Undef {
 		return ctx.Trigger(rm.ClientEventPaymentChannelCreateInitiated, msgCID)
