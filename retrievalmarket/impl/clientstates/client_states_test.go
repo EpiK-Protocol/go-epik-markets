@@ -16,7 +16,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-statemachine/fsm"
 	fsmtest "github.com/filecoin-project/go-statemachine/fsm/testutil"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	rm "github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -335,7 +335,7 @@ func TestSendFunds(t *testing.T) {
 		fsmCtx.ReplayEvents(t, dealState)
 	}
 
-	testVoucher := &paych.SignedVoucher{}
+	testVoucher := &flowch.SignedVoucher{}
 
 	t.Run("it works", func(t *testing.T) {
 		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)

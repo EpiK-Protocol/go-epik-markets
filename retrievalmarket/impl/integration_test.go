@@ -27,7 +27,7 @@ import (
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/piecestore"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -568,7 +568,7 @@ func setupClient(
 	ctx context.Context,
 	t *testing.T,
 	clientPaymentChannel address.Address,
-	expectedVoucher *paych.SignedVoucher,
+	expectedVoucher *flowch.SignedVoucher,
 	nw1 rmnet.RetrievalMarketNetwork,
 	testData *tut.Libp2pTestData,
 	addFunds bool,
@@ -576,7 +576,7 @@ func setupClient(
 ) (
 	*pmtChan,
 	*address.Address,
-	*paych.SignedVoucher,
+	*flowch.SignedVoucher,
 	*testnodes.TestRetrievalClientNode,
 	retrievalmarket.RetrievalClient,
 	error) {
@@ -590,8 +590,8 @@ func setupClient(
 		newLaneAddr = paymentChannel
 	}
 
-	var createdVoucher paych.SignedVoucher
-	paymentVoucherRecorder := func(v *paych.SignedVoucher) {
+	var createdVoucher flowch.SignedVoucher
+	paymentVoucherRecorder := func(v *flowch.SignedVoucher) {
 		createdVoucher = *v
 	}
 	cids := tut.GenerateCids(2)

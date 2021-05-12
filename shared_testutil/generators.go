@@ -17,8 +17,8 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
@@ -26,8 +26,8 @@ import (
 )
 
 // MakeTestSignedVoucher generates a random SignedVoucher that has all non-zero fields
-func MakeTestSignedVoucher() *paych.SignedVoucher {
-	return &paych.SignedVoucher{
+func MakeTestSignedVoucher() *flowch.SignedVoucher {
+	return &flowch.SignedVoucher{
 		ChannelAddr:    address.TestAddress,
 		TimeLockMin:    abi.ChainEpoch(rand.Int63()),
 		TimeLockMax:    0,
@@ -36,14 +36,14 @@ func MakeTestSignedVoucher() *paych.SignedVoucher {
 		Lane:           rand.Uint64(),
 		Nonce:          rand.Uint64(),
 		Amount:         MakeTestTokenAmount(),
-		Merges:         []paych.Merge{MakeTestMerge()},
+		Merges:         []flowch.Merge{MakeTestMerge()},
 		Signature:      MakeTestSignature(),
 	}
 }
 
 // MakeTestModVerifyParams generates a random ModVerifyParams that has all non-zero fields
-func MakeTestModVerifyParams() *paych.ModVerifyParams {
-	return &paych.ModVerifyParams{
+func MakeTestModVerifyParams() *flowch.ModVerifyParams {
+	return &flowch.ModVerifyParams{
 		Actor:  address.TestAddress,
 		Method: abi.MethodNum(rand.Int63()),
 		Data:   []byte("ModVerifyParams data"),
@@ -51,8 +51,8 @@ func MakeTestModVerifyParams() *paych.ModVerifyParams {
 }
 
 // MakeTestMerge generates a random Merge that has all non-zero fields
-func MakeTestMerge() paych.Merge {
-	return paych.Merge{
+func MakeTestMerge() flowch.Merge {
+	return flowch.Merge{
 		Lane:  rand.Uint64(),
 		Nonce: rand.Uint64(),
 	}

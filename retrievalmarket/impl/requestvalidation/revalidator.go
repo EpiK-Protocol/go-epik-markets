@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/filecoin-project/go-address"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -30,6 +31,7 @@ type channelData struct {
 	pricePerByte   abi.TokenAmount
 	reload         bool
 	legacyProtocol bool
+	paymentChannel address.Address
 }
 
 // ProviderRevalidator defines data transfer revalidation logic in the context of
@@ -113,6 +115,7 @@ func (pr *ProviderRevalidator) Revalidate(channelID datatransfer.ChannelID, vouc
 		payment = &newPayment
 		legacyProtocol = true
 	}
+	channel.paymentChannel = payment.PaymentChannel
 
 	response, err := pr.processPayment(channel.dealID, payment)
 	if err == nil {
@@ -163,6 +166,10 @@ func (pr *ProviderRevalidator) processPayment(dealID rm.ProviderDealIdentifier, 
 	// resume deal
 	_ = pr.env.SendEvent(dealID, rm.ProviderEventPaymentReceived, received)
 	if deal.Status == rm.DealStatusFundsNeededLastPayment {
+		err = pr.env.Node().OnComplete(context.TODO(), payment.PaymentChannel)
+		if err != nil {
+			return errorDealResponse(dealID, err), err
+		}
 		return &rm.DealResponse{
 			ID:     deal.ID,
 			Status: rm.DealStatusCompleted,
@@ -245,6 +252,10 @@ func (pr *ProviderRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, da
 
 	paymentOwed := big.Mul(abi.NewTokenAmount(int64(channel.totalSent-channel.totalPaidFor)), channel.pricePerByte)
 	if paymentOwed.Equals(big.Zero()) {
+		err = pr.env.Node().OnComplete(context.TODO(), channel.paymentChannel)
+		if err != nil {
+			return true, nil, err
+		}
 		return true, finalResponse(&rm.DealResponse{
 			ID:     channel.dealID.DealID,
 			Status: rm.DealStatusCompleted,

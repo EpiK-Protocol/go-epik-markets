@@ -13,7 +13,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/shared"
@@ -101,7 +101,7 @@ func (trpn *TestRetrievalProviderNode) VerifyExpectations(t *testing.T) {
 func (trpn *TestRetrievalProviderNode) SavePaymentVoucher(
 	ctx context.Context,
 	paymentChannel address.Address,
-	voucher *paych.SignedVoucher,
+	voucher *flowch.SignedVoucher,
 	proof []byte,
 	expectedAmount abi.TokenAmount,
 	tok shared.TipSetToken) (abi.TokenAmount, error) {
@@ -117,6 +117,13 @@ func (trpn *TestRetrievalProviderNode) SavePaymentVoucher(
 	return abi.TokenAmount{}, errors.New("SavePaymentVoucher failed")
 }
 
+// OnComplete simulates settle the payment
+func (trpn *TestRetrievalProviderNode) OnComplete(
+	ctx context.Context,
+	paymentChannel address.Address) error {
+	return nil
+}
+
 // GetMinerWorkerAddress translates an address
 func (trpn *TestRetrievalProviderNode) GetMinerWorkerAddress(ctx context.Context, addr address.Address, tok shared.TipSetToken) (address.Address, error) {
 	return addr, nil
@@ -130,7 +137,7 @@ func (trpn *TestRetrievalProviderNode) GetChainHead(ctx context.Context) (shared
 // --- Non-interface Functions
 
 // to ExpectedVoucherKey creates a lookup key for expected vouchers.
-func (trpn *TestRetrievalProviderNode) toExpectedVoucherKey(paymentChannel address.Address, voucher *paych.SignedVoucher, proof []byte, expectedAmount abi.TokenAmount) (expectedVoucherKey, error) {
+func (trpn *TestRetrievalProviderNode) toExpectedVoucherKey(paymentChannel address.Address, voucher *flowch.SignedVoucher, proof []byte, expectedAmount abi.TokenAmount) (expectedVoucherKey, error) {
 	pcString := paymentChannel.String()
 	buf := new(bytes.Buffer)
 	if err := voucher.MarshalCBOR(buf); err != nil {
@@ -151,7 +158,7 @@ func (trpn *TestRetrievalProviderNode) toExpectedVoucherKey(paymentChannel addre
 //     expectedErr:  an error message to expect
 func (trpn *TestRetrievalProviderNode) ExpectVoucher(
 	paymentChannel address.Address,
-	voucher *paych.SignedVoucher,
+	voucher *flowch.SignedVoucher,
 	proof []byte,
 	expectedAmount abi.TokenAmount,
 	actualAmount abi.TokenAmount, // the actual amount it should have (same unless you want to trigger an error)

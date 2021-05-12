@@ -18,7 +18,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/piecestore"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -200,7 +200,7 @@ type retrievalHarness struct {
 	PieceStore                  piecestore.PieceStore
 	ExpPaych, NewLaneAddr       *address.Address
 	ExpPaychAmt, ActualPaychAmt *abi.TokenAmount
-	ExpVoucher, ActualVoucher   *paych.SignedVoucher
+	ExpVoucher, ActualVoucher   *flowch.SignedVoucher
 	RetrievalParams             retrievalmarket.Params
 }
 
@@ -216,8 +216,8 @@ func newRetrievalHarness(ctx context.Context, t *testing.T, sh *testharness.Stor
 		newLaneAddr = paymentChannel
 	}
 
-	var newVoucher paych.SignedVoucher
-	paymentVoucherRecorder := func(v *paych.SignedVoucher) {
+	var newVoucher flowch.SignedVoucher
+	paymentVoucherRecorder := func(v *flowch.SignedVoucher) {
 		newVoucher = *v
 	}
 

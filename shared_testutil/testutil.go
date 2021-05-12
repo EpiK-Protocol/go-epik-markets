@@ -17,7 +17,7 @@ import (
 
 	cborutil "github.com/filecoin-project/go-cbor-util"
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
@@ -96,7 +96,7 @@ func ContainsBlock(blks []blocks.Block, block blocks.Block) bool {
 }
 
 // TestVoucherEquality verifies that two vouchers are equal to one another
-func TestVoucherEquality(t *testing.T, a, b *paych.SignedVoucher) {
+func TestVoucherEquality(t *testing.T, a, b *flowch.SignedVoucher) {
 	aB, err := cborutil.Dump(a)
 	require.NoError(t, err)
 	bB, err := cborutil.Dump(b)
