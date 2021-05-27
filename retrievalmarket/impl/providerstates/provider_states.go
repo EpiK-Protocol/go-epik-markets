@@ -21,7 +21,7 @@ import (
 type ProviderDealEnvironment interface {
 	// Node returns the node interface for this deal
 	Node() rm.RetrievalProviderNode
-	ReadIntoBlockstore(storeID multistore.StoreID, pieceData io.Reader) error
+	ReadIntoBlockstore(storeID multistore.StoreID, pieceData io.ReadCloser) error
 	TrackTransfer(deal rm.ProviderDealState) error
 	UntrackTransfer(deal rm.ProviderDealState) error
 	DeleteStore(storeID multistore.StoreID) error
@@ -29,7 +29,7 @@ type ProviderDealEnvironment interface {
 	CloseDataTransfer(context.Context, datatransfer.ChannelID) error
 }
 
-func firstSuccessfulUnseal(ctx context.Context, node rm.RetrievalProviderNode, pieceInfo piecestore.PieceInfo) (io.Reader, error) {
+func firstSuccessfulUnseal(ctx context.Context, node rm.RetrievalProviderNode, pieceInfo piecestore.PieceInfo) (io.ReadCloser, error) {
 	lastErr := xerrors.New("no sectors found to unseal from")
 	for _, deal := range pieceInfo.Deals {
 		reader, err := node.UnsealSector(ctx, deal.SectorID, deal.Offset.Unpadded(), deal.Length.Unpadded())
@@ -69,9 +69,11 @@ func UnpauseDeal(ctx fsm.Context, environment ProviderDealEnvironment, deal rm.P
 	if err != nil {
 		return ctx.Trigger(rm.ProviderEventDataTransferError, err)
 	}
-	err = environment.ResumeDataTransfer(ctx.Context(), deal.ChannelID)
-	if err != nil {
-		return ctx.Trigger(rm.ProviderEventDataTransferError, err)
+	if deal.ChannelID != nil {
+		err = environment.ResumeDataTransfer(ctx.Context(), *deal.ChannelID)
+		if err != nil {
+			return ctx.Trigger(rm.ProviderEventDataTransferError, err)
+		}
 	}
 	return nil
 }
@@ -87,9 +89,11 @@ func CancelDeal(ctx fsm.Context, environment ProviderDealEnvironment, deal rm.Pr
 	if err != nil {
 		return ctx.Trigger(rm.ProviderEventMultiStoreError, err)
 	}
-	err = environment.CloseDataTransfer(ctx.Context(), deal.ChannelID)
-	if err != nil && !errors.Is(err, statemachine.ErrTerminated) {
-		return ctx.Trigger(rm.ProviderEventDataTransferError, err)
+	if deal.ChannelID != nil {
+		err = environment.CloseDataTransfer(ctx.Context(), *deal.ChannelID)
+		if err != nil && !errors.Is(err, statemachine.ErrTerminated) {
+			return ctx.Trigger(rm.ProviderEventDataTransferError, err)
+		}
 	}
 	return ctx.Trigger(rm.ProviderEventCancelComplete)
 }

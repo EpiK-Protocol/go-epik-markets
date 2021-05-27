@@ -93,6 +93,7 @@ func TestProposeDeal(t *testing.T) {
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusErrored)
 	})
 }
+
 func TestSetupPaymentChannel(t *testing.T) {
 	ctx := context.Background()
 	expectedPayCh := address.TestAddress2
@@ -131,7 +132,7 @@ func TestSetupPaymentChannel(t *testing.T) {
 		runSetupPaymentChannel(t, envParams, dealState)
 		require.Empty(t, dealState.Message)
 		require.Equal(t, envParams.AddFundsCID, *dealState.WaitMsgCID)
-		require.Equal(t, retrievalmarket.DealStatusPaymentChannelAllocatingLane, dealState.Status)
+		require.Equal(t, retrievalmarket.DealStatusPaymentChannelAddingInitialFunds, dealState.Status)
 		require.Equal(t, expectedPayCh, dealState.PaymentInfo.PayCh)
 	})
 
@@ -297,13 +298,7 @@ func TestProcessPaymentRequested(t *testing.T) {
 		fsmCtx.ReplayEvents(t, dealState)
 	}
 
-	t.Run("it works - to send funds", func(t *testing.T) {
-		dealState := makeDealState(retrievalmarket.DealStatusFundsNeeded)
-		runProcessPaymentRequested(t, dealState)
-		require.Equal(t, dealState.Status, retrievalmarket.DealStatusSendFunds)
-	})
-
-	t.Run("it works - to send funds", func(t *testing.T) {
+	t.Run("send funds last payment", func(t *testing.T) {
 		dealState := makeDealState(retrievalmarket.DealStatusFundsNeededLastPayment)
 		dealState.TotalReceived = defaultBytesPaidFor + 500
 		dealState.AllBlocksReceived = true
@@ -311,9 +306,47 @@ func TestProcessPaymentRequested(t *testing.T) {
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusSendFundsLastPayment)
 	})
 
-	t.Run("no change", func(t *testing.T) {
+	t.Run("send funds if unseal funds needed", func(t *testing.T) {
 		dealState := makeDealState(retrievalmarket.DealStatusFundsNeeded)
-		dealState.BytesPaidFor = defaultBytesPaidFor + 500
+		dealState.UnsealPrice = abi.NewTokenAmount(1000)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		runProcessPaymentRequested(t, dealState)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusSendFunds)
+	})
+
+	t.Run("dont send funds if paid for all bytes received", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusFundsNeeded)
+		dealState.BytesPaidFor = 1000
+		dealState.TotalReceived = 1000
+		dealState.CurrentInterval = 1000
+		runProcessPaymentRequested(t, dealState)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFundsNeeded)
+	})
+
+	t.Run("send funds if not all bytes paid for and all blocks received", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusFundsNeeded)
+		dealState.BytesPaidFor = 900
+		dealState.TotalReceived = 1000
+		dealState.AllBlocksReceived = true
+		dealState.CurrentInterval = 1000
+		runProcessPaymentRequested(t, dealState)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusSendFunds)
+	})
+
+	t.Run("send funds if total received > current deal interval", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusFundsNeeded)
+		dealState.BytesPaidFor = 900
+		dealState.TotalReceived = 1000
+		dealState.CurrentInterval = 900
+		runProcessPaymentRequested(t, dealState)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusSendFunds)
+	})
+
+	t.Run("dont send funds if total received < current deal interval", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusFundsNeeded)
+		dealState.BytesPaidFor = 900
+		dealState.TotalReceived = 999
+		dealState.CurrentInterval = 1000
 		runProcessPaymentRequested(t, dealState)
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFundsNeeded)
 	})
@@ -330,6 +363,11 @@ func TestSendFunds(t *testing.T) {
 		node := testnodes.NewTestRetrievalClientNode(nodeParams)
 		environment := &fakeEnvironment{node, nil, sendDataTransferVoucherError, nil}
 		fsmCtx := fsmtest.NewTestContext(ctx, eventMachine)
+		dealState.ChannelID = &datatransfer.ChannelID{
+			Initiator: "initiator",
+			Responder: dealState.Sender,
+			ID:        1,
+		}
 		err := clientstates.SendFunds(fsmCtx, environment, *dealState)
 		require.NoError(t, err)
 		fsmCtx.ReplayEvents(t, dealState)
@@ -337,83 +375,187 @@ func TestSendFunds(t *testing.T) {
 
 	testVoucher := &flowch.SignedVoucher{}
 
-	t.Run("it works", func(t *testing.T) {
+	t.Run("send funds", func(t *testing.T) {
 		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
 		var sendVoucherError error = nil
 		nodeParams := testnodes.TestRetrievalClientNodeParams{
 			Voucher: testVoucher,
 		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(200)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(200)
+		dealState.BytesPaidFor = 800
+		dealState.FundsSpent = abi.NewTokenAmount(1000)
+		dealState.PaymentRequested = abi.NewTokenAmount(500)
+		dealState.CurrentInterval = 1000
+		dealState.PaymentInterval = 1000
+		dealState.PaymentIntervalIncrease = 100
+		dealState.TotalReceived = 1000
+
+		// Should send voucher for 1200 = transfer price (1000 * 1) + unseal price 200
 		runSendFunds(t, sendVoucherError, nodeParams, dealState)
 		require.Empty(t, dealState.Message)
-		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(0))
-		require.Equal(t, dealState.FundsSpent, big.Add(defaultFundsSpent, defaultPaymentRequested))
-		require.Equal(t, dealState.BytesPaidFor, defaultTotalReceived)
-		require.Equal(t, dealState.CurrentInterval, defaultCurrentInterval+defaultIntervalIncrease)
+		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(500-(1000-800)))
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(1000+200))
+		require.EqualValues(t, dealState.BytesPaidFor, 1000)
+		require.EqualValues(t, dealState.CurrentInterval, 1000+(1000+100))
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
 	})
 
-	t.Run("last payment", func(t *testing.T) {
+	t.Run("send funds last payment", func(t *testing.T) {
 		dealState := makeDealState(retrievalmarket.DealStatusSendFundsLastPayment)
 		var sendVoucherError error = nil
 		nodeParams := testnodes.TestRetrievalClientNodeParams{
 			Voucher: testVoucher,
 		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(200)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(200)
+		dealState.BytesPaidFor = 800
+		dealState.FundsSpent = abi.NewTokenAmount(1000)
+		dealState.PaymentRequested = abi.NewTokenAmount(500)
+		dealState.CurrentInterval = 1000
+		dealState.PaymentInterval = 1000
+		dealState.PaymentIntervalIncrease = 100
+		dealState.TotalReceived = 1000
+
+		// Should send voucher for 1200 = transfer price (1000 * 1) + unseal price 200
 		runSendFunds(t, sendVoucherError, nodeParams, dealState)
 		require.Empty(t, dealState.Message)
-		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(0))
-		require.Equal(t, dealState.FundsSpent, big.Add(defaultFundsSpent, defaultPaymentRequested))
-		require.Equal(t, dealState.BytesPaidFor, defaultTotalReceived)
-		require.Equal(t, dealState.CurrentInterval, defaultCurrentInterval+defaultIntervalIncrease)
+		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(500-(1000-800)))
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(1000+200))
+		require.EqualValues(t, dealState.BytesPaidFor, 1000)
+		require.EqualValues(t, dealState.CurrentInterval, 1000+(1000+100))
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFinalizing)
 	})
 
-	t.Run("more bytes since last payment than interval works, can charge more", func(t *testing.T) {
+	t.Run("dont send funds if total received less then interval", func(t *testing.T) {
 		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
-		dealState.BytesPaidFor = defaultBytesPaidFor - 500
-		largerPaymentRequested := abi.NewTokenAmount(750000)
-		dealState.PaymentRequested = largerPaymentRequested
+		var sendVoucherError error = nil
+		nodeParams := testnodes.TestRetrievalClientNodeParams{
+			Voucher: testVoucher,
+		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(200)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(200)
+		dealState.BytesPaidFor = 800
+		dealState.FundsSpent = abi.NewTokenAmount(1000)
+		dealState.PaymentRequested = abi.NewTokenAmount(500)
+		dealState.CurrentInterval = 2000
+		dealState.TotalReceived = 1000
+
+		// Should not send voucher
+		runSendFunds(t, sendVoucherError, nodeParams, dealState)
+		require.Empty(t, dealState.Message)
+		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(500))
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(1000))
+		require.EqualValues(t, dealState.BytesPaidFor, 800)
+		require.EqualValues(t, dealState.CurrentInterval, 2000)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
+	})
+
+	t.Run("dont send funds if total price <= funds spent", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
+		var sendVoucherError error = nil
+		nodeParams := testnodes.TestRetrievalClientNodeParams{
+			Voucher: testVoucher,
+		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(200)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(200)
+		dealState.BytesPaidFor = 800
+		dealState.FundsSpent = abi.NewTokenAmount(1200)
+		dealState.PaymentRequested = abi.NewTokenAmount(500)
+		dealState.CurrentInterval = 1000
+		dealState.PaymentInterval = 1000
+		dealState.PaymentIntervalIncrease = 100
+		dealState.TotalReceived = 1000
+
+		// Total price 1200 = transfer price (1000 * 1) + unseal price 200
+		// Funds spent = 1200
+		// So don't send voucher
+		runSendFunds(t, sendVoucherError, nodeParams, dealState)
+		require.Empty(t, dealState.Message)
+		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(500))
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(1200))
+		require.EqualValues(t, dealState.BytesPaidFor, 800)
+		require.EqualValues(t, dealState.CurrentInterval, 1000)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
+	})
+
+	t.Run("dont send funds if interval not met", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
+		var sendVoucherError error = nil
+		nodeParams := testnodes.TestRetrievalClientNodeParams{
+			Voucher: testVoucher,
+		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(0)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		dealState.FundsSpent = abi.NewTokenAmount(1000)
+		dealState.PaymentRequested = abi.NewTokenAmount(200)
+		dealState.BytesPaidFor = 1000
+		dealState.TotalReceived = 1200
+		dealState.CurrentInterval = 2000
+
+		// Should not send voucher: bytes received 1200 < interval 2000
+		runSendFunds(t, sendVoucherError, nodeParams, dealState)
+		require.Empty(t, dealState.Message)
+		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(200))
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(1000))
+		require.EqualValues(t, dealState.BytesPaidFor, 1000)
+		require.EqualValues(t, dealState.CurrentInterval, 2000)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
+	})
+
+	t.Run("send funds if all blocks received, even if interval not met", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
+		var sendVoucherError error = nil
+		nodeParams := testnodes.TestRetrievalClientNodeParams{
+			Voucher: testVoucher,
+		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(0)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		dealState.FundsSpent = abi.NewTokenAmount(1000)
+		dealState.PaymentRequested = abi.NewTokenAmount(200)
+		dealState.BytesPaidFor = 1000
+		dealState.TotalReceived = 1200
+		dealState.CurrentInterval = 2000
+		dealState.AllBlocksReceived = true
+
+		// Should send voucher for 1200 = transfer price (1200 * 1)
+		runSendFunds(t, sendVoucherError, nodeParams, dealState)
+		require.Empty(t, dealState.Message)
+		require.True(t, dealState.PaymentRequested.IsZero())
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(1200))
+		require.EqualValues(t, dealState.BytesPaidFor, 1200)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
+	})
+
+	t.Run("only unsealing payment is accounted for when price per bytes is zero", func(t *testing.T) {
+		dealState := makeDealState(retrievalmarket.DealStatusSendFundsLastPayment)
+
+		dealState.PricePerByte = abi.NewTokenAmount(0)
+		dealState.UnsealPrice = abi.NewTokenAmount(200)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		dealState.BytesPaidFor = 0
+		dealState.FundsSpent = abi.NewTokenAmount(0)
+		dealState.PaymentRequested = abi.NewTokenAmount(200)
+		dealState.CurrentInterval = 1000
+		dealState.TotalReceived = 1000
+
 		var sendVoucherError error = nil
 		nodeParams := testnodes.TestRetrievalClientNodeParams{
 			Voucher: testVoucher,
 		}
 		runSendFunds(t, sendVoucherError, nodeParams, dealState)
 		require.Empty(t, dealState.Message)
-		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(0))
-		require.Equal(t, dealState.FundsSpent, big.Add(defaultFundsSpent, largerPaymentRequested))
-		require.Equal(t, dealState.BytesPaidFor, defaultTotalReceived)
-		require.Equal(t, dealState.CurrentInterval, defaultCurrentInterval+defaultIntervalIncrease)
-		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
-	})
-
-	t.Run("too much payment requested", func(t *testing.T) {
-		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
-		dealState.PaymentRequested = abi.NewTokenAmount(750000)
-		var sendVoucherError error = nil
-		nodeParams := testnodes.TestRetrievalClientNodeParams{
-			Voucher: testVoucher,
-		}
-		runSendFunds(t, sendVoucherError, nodeParams, dealState)
-		require.NotEmpty(t, dealState.Message)
-		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFailing)
-	})
-
-	t.Run("too little payment requested works but records correctly", func(t *testing.T) {
-		dealState := makeDealState(retrievalmarket.DealStatusSendFunds)
-		smallerPaymentRequested := abi.NewTokenAmount(250000)
-		dealState.PaymentRequested = smallerPaymentRequested
-		var sendVoucherError error = nil
-		nodeParams := testnodes.TestRetrievalClientNodeParams{
-			Voucher: testVoucher,
-		}
-		runSendFunds(t, sendVoucherError, nodeParams, dealState)
-		require.Empty(t, dealState.Message)
-		require.Equal(t, dealState.PaymentRequested, abi.NewTokenAmount(0))
-		require.Equal(t, dealState.FundsSpent, big.Add(defaultFundsSpent, smallerPaymentRequested))
-		// only records change for those bytes paid for
-		require.Equal(t, dealState.BytesPaidFor, defaultBytesPaidFor+500)
-		// no interval increase
-		require.Equal(t, dealState.CurrentInterval, defaultCurrentInterval)
-		require.Equal(t, dealState.Status, retrievalmarket.DealStatusOngoing)
+		require.True(t, dealState.PaymentRequested.IsZero())
+		require.Equal(t, dealState.FundsSpent, abi.NewTokenAmount(200))
+		require.EqualValues(t, dealState.BytesPaidFor, 0)
+		require.EqualValues(t, dealState.CurrentInterval, 1000)
+		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFinalizing)
 	})
 
 	t.Run("voucher create fails", func(t *testing.T) {
@@ -422,6 +564,14 @@ func TestSendFunds(t *testing.T) {
 		nodeParams := testnodes.TestRetrievalClientNodeParams{
 			VoucherError: errors.New("Something Went Wrong"),
 		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(0)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		dealState.BytesPaidFor = 0
+		dealState.FundsSpent = abi.NewTokenAmount(0)
+		dealState.PaymentRequested = abi.NewTokenAmount(1000)
+		dealState.CurrentInterval = 1000
+		dealState.TotalReceived = 1000
 		runSendFunds(t, sendVoucherError, nodeParams, dealState)
 		require.NotEmpty(t, dealState.Message)
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusFailing)
@@ -434,6 +584,14 @@ func TestSendFunds(t *testing.T) {
 		nodeParams := testnodes.TestRetrievalClientNodeParams{
 			VoucherError: retrievalmarket.NewShortfallError(shortFall),
 		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(0)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		dealState.BytesPaidFor = 0
+		dealState.FundsSpent = abi.NewTokenAmount(0)
+		dealState.PaymentRequested = abi.NewTokenAmount(1000)
+		dealState.CurrentInterval = 1000
+		dealState.TotalReceived = 1000
 		runSendFunds(t, sendVoucherError, nodeParams, dealState)
 		require.Empty(t, dealState.Message)
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusCheckFunds)
@@ -445,6 +603,14 @@ func TestSendFunds(t *testing.T) {
 		nodeParams := testnodes.TestRetrievalClientNodeParams{
 			Voucher: testVoucher,
 		}
+		dealState.PricePerByte = abi.NewTokenAmount(1)
+		dealState.UnsealPrice = abi.NewTokenAmount(0)
+		dealState.UnsealFundsPaid = abi.NewTokenAmount(0)
+		dealState.BytesPaidFor = 0
+		dealState.FundsSpent = abi.NewTokenAmount(0)
+		dealState.PaymentRequested = abi.NewTokenAmount(1000)
+		dealState.CurrentInterval = 1000
+		dealState.TotalReceived = 1000
 		runSendFunds(t, sendVoucherError, nodeParams, dealState)
 		require.NotEmpty(t, dealState.Message)
 		require.Equal(t, dealState.Status, retrievalmarket.DealStatusErrored)
@@ -526,6 +692,11 @@ func TestCancelDeal(t *testing.T) {
 		node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
 		environment := &fakeEnvironment{node, nil, nil, closeError}
 		fsmCtx := fsmtest.NewTestContext(ctx, eventMachine)
+		dealState.ChannelID = &datatransfer.ChannelID{
+			Initiator: "initiator",
+			Responder: dealState.Sender,
+			ID:        1,
+		}
 		err := clientstates.CancelDeal(fsmCtx, environment, *dealState)
 		require.NoError(t, err)
 		fsmCtx.ReplayEvents(t, dealState)

@@ -49,8 +49,9 @@ type PaymentInfo struct {
 // of a retrieval client
 type ClientDealState struct {
 	DealProposal
-	StoreID              *multistore.StoreID
-	ChannelID            datatransfer.ChannelID
+	StoreID *multistore.StoreID
+	// Set when the data transfer is started
+	ChannelID            *datatransfer.ChannelID
 	LastPaymentRequested bool
 	AllBlocksReceived    bool
 	TotalSize            uint64
@@ -72,12 +73,16 @@ type ClientDealState struct {
 	LegacyProtocol       bool
 }
 
+func (deal *ClientDealState) NextInterval() uint64 {
+	return deal.Params.NextInterval(deal.CurrentInterval)
+}
+
 // ProviderDealState is the current state of a deal from the point of view
 // of a retrieval provider
 type ProviderDealState struct {
 	DealProposal
 	StoreID         multistore.StoreID
-	ChannelID       datatransfer.ChannelID
+	ChannelID       *datatransfer.ChannelID
 	PieceInfo       *piecestore.PieceInfo
 	Status          DealStatus
 	Receiver        peer.ID
@@ -86,6 +91,14 @@ type ProviderDealState struct {
 	Message         string
 	CurrentInterval uint64
 	LegacyProtocol  bool
+}
+
+func (deal *ProviderDealState) IntervalLowerBound() uint64 {
+	return deal.Params.IntervalLowerBound(deal.CurrentInterval)
+}
+
+func (deal *ProviderDealState) NextInterval() uint64 {
+	return deal.Params.NextInterval(deal.CurrentInterval)
 }
 
 // Identifier provides a unique id for this provider deal
@@ -246,6 +259,28 @@ type Params struct {
 
 func (p Params) SelectorSpecified() bool {
 	return p.Selector != nil && !bytes.Equal(p.Selector.Raw, cbg.CborNull)
+}
+
+func (p Params) IntervalLowerBound(currentInterval uint64) uint64 {
+	intervalSize := p.PaymentInterval
+	var lowerBound uint64
+	var target uint64
+	for target < currentInterval {
+		lowerBound = target
+		target += intervalSize
+		intervalSize += p.PaymentIntervalIncrease
+	}
+	return lowerBound
+}
+
+func (p Params) NextInterval(currentInterval uint64) uint64 {
+	intervalSize := p.PaymentInterval
+	var nextInterval uint64
+	for nextInterval <= currentInterval {
+		nextInterval += intervalSize
+		intervalSize += p.PaymentIntervalIncrease
+	}
+	return nextInterval
 }
 
 // NewParamsV0 generates parameters for a retrieval deal, which is always a whole piece deal

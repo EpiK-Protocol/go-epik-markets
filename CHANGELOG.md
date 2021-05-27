@@ -1,5 +1,150 @@
 # go-fil-markets changelog
 
+# go-fil-markets v1.3.0
+
+- github.com/filecoin-project/go-fil-markets:
+  - fix restarts during data transfer for a retrieval deal (#540) ([filecoin-project/go-fil-markets#540](https://github.com/filecoin-project/go-fil-markets/pull/540))
+  - Test Retrieval for offline deals (#541) ([filecoin-project/go-fil-markets#541](https://github.com/filecoin-project/go-fil-markets/pull/541))
+  - Allow anonymous submodule checkout (#535) ([filecoin-project/go-fil-markets#535](https://github.com/filecoin-project/go-fil-markets/pull/535))
+- github.com/filecoin-project/go-data-transfer (v1.4.3 -> v1.5.0):
+  - Add isRestart param to validators (#197) ([filecoin-project/go-data-transfer#197](https://github.com/filecoin-project/go-data-transfer/pull/197))
+  - fix: flaky TestChannelMonitorAutoRestart (#198) ([filecoin-project/go-data-transfer#198](https://github.com/filecoin-project/go-data-transfer/pull/198))
+  - Channel monitor watches for errors instead of measuring data rate (#190) ([filecoin-project/go-data-transfer#190](https://github.com/filecoin-project/go-data-transfer/pull/190))
+  - fix: prevent concurrent restarts for same channel (#195) ([filecoin-project/go-data-transfer#195](https://github.com/filecoin-project/go-data-transfer/pull/195))
+  - fix: channel state machine event handling (#194) ([filecoin-project/go-data-transfer#194](https://github.com/filecoin-project/go-data-transfer/pull/194))
+  - Dont double count data sent (#185) ([filecoin-project/go-data-transfer#185](https://github.com/filecoin-project/go-data-transfer/pull/185))
+- github.com/ipfs/go-graphsync (v0.6.0 -> v0.6.1):
+  - feat: fire network error when network disconnects during request (#164) ([ipfs/go-graphsync#164](https://github.com/ipfs/go-graphsync/pull/164))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 9 | +2595/-1346 | 70 |
+| Aarsh Shah | 1 | +226/-71 | 1 |
+| Dirk McCormick | 2 | +32/-0 | 2 |
+| Peter Rabbitson | 1 | +1/-1 | 1 |
+
+# go-fil-markets v1.2.5
+
+- github.com/filecoin-project/go-fil-markets:
+  - add timeout for sending cancel message to peer when retrieval cancelled (#531) ([filecoin-project/go-fil-markets#531](https://github.com/filecoin-project/go-fil-markets/pull/531))
+  - Flush out & fix retrieval bugs (#525) ([filecoin-project/go-fil-markets#525](https://github.com/filecoin-project/go-fil-markets/pull/525))
+  - fix: use time-based deal ID instead of stored counter (#529) ([filecoin-project/go-fil-markets#529](https://github.com/filecoin-project/go-fil-markets/pull/529))
+- github.com/filecoin-project/go-data-transfer (v1.4.1 -> v1.4.2):
+  - Support no-op error responses  (#186) ([filecoin-project/go-data-transfer#186](https://github.com/filecoin-project/go-data-transfer/pull/186))
+  - fix: fail a pull channel when there is a timeout receiving the Complete message (#179) ([filecoin-project/go-data-transfer#179](https://github.com/filecoin-project/go-data-transfer/pull/179))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Aarsh Shah | 2 | +293/-364 | 16 |
+| dirkmc | 4 | +206/-149 | 12 |
+| Dirk McCormick | 1 | +13/-0 | 1 |
+
+# go-fil-markets v1.2.4
+
+- github.com/filecoin-project/go-fil-markets:
+  - feat: update to go-data-transfer v1.4.1 (#523) ([filecoin-project/go-fil-markets#523](https://github.com/filecoin-project/go-fil-markets/pull/523))
+  - Poll Provider for acceptance only till (deal start epoch + grace period) has elapsed  (#516) ([filecoin-project/go-fil-markets#516](https://github.com/filecoin-project/go-fil-markets/pull/516))
+  - Add DealStages to track and log Deal status updates (#502) ([filecoin-project/go-fil-markets#502](https://github.com/filecoin-project/go-fil-markets/pull/502))
+- github.com/filecoin-project/go-data-transfer (v1.4.0 -> v1.4.1):
+  - Add ChannelStages to keep track of history of lifecycle of a DataTransfer (#163) ([filecoin-project/go-data-transfer#163](https://github.com/filecoin-project/go-data-transfer/pull/163))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Anton Evangelatov | 2 | +1360/-39 | 16 |
+| Aarsh Shah | 1 | +42/-0 | 2 |
+| dirkmc | 3 | +32/-3 | 5 |
+| Dirk McCormick | 1 | +11/-0 | 1 |
+
+# go-fil-markets v1.2.3
+
+Generating Changelog for github.com/filecoin-project/go-fil-markets v1.2.2..cf830ee0459221d4ba7e91f105a0f19b6d5a453e
+- github.com/filecoin-project/go-fil-markets:
+  - fix: process payment request from provider while initiating payment channel (#520) ([filecoin-project/go-fil-markets#520](https://github.com/filecoin-project/go-fil-markets/pull/520))
+  - fix: remove LocatePieceForDealWithinSector (no longer used) (#518) ([filecoin-project/go-fil-markets#518](https://github.com/filecoin-project/go-fil-markets/pull/518))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 3 | +66/-60 | 8 |
+
+# go-fil-markets v1.2.2
+
+- github.com/filecoin-project/go-fil-markets:
+  - feat: update to go-data-transfer v1.4.0 (#514) ([filecoin-project/go-fil-markets#514](https://github.com/filecoin-project/go-fil-markets/pull/514))
+- github.com/filecoin-project/go-data-transfer (v1.3.0 -> v1.4.0):
+  - feat: add config options to enable / disable push or pull monitoring individually (#174) ([filecoin-project/go-data-transfer#174](https://github.com/filecoin-project/go-data-transfer/pull/174))
+  - fix: ensure channel monitor shuts down when transfer complete (#171) ([filecoin-project/go-data-transfer#171](https://github.com/filecoin-project/go-data-transfer/pull/171))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 5 | +65/-17 | 9 |
+| Dirk McCormick | 1 | +12/-0 | 1 |
+
+# go-fil-markets v1.2.1
+
+- github.com/filecoin-project/go-fil-markets:
+  - feat: update tests for go-data-transfer 1.3.0 (#510) ([filecoin-project/go-fil-markets#510](https://github.com/filecoin-project/go-fil-markets/pull/510))
+- github.com/filecoin-project/go-data-transfer (v1.2.9 -> v1.3.0):
+  - feat: use random number instead of incrementing counter for transfer ID (#169) ([filecoin-project/go-data-transfer#169](https://github.com/filecoin-project/go-data-transfer/pull/169))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 4 | +185/-95 | 21 |
+| Dirk McCormick | 1 | +11/-0 | 1 |
+
+# go-fil-markets v1.2.0
+
+- github.com/filecoin-project/go-fil-markets:
+  - feat: update to go-data-transfer v1.2.9 (#508) (#504) ([filecoin-project/go-fil-markets#504](https://github.com/filecoin-project/go-fil-markets/pull/504))
+  - always try to return some message to the client (#498) ([filecoin-project/go-fil-markets#498](https://github.com/filecoin-project/go-fil-markets/pull/498))
+  - fix: close the reader after unsealing into blockstore (#507) ([filecoin-project/go-fil-markets#507](https://github.com/filecoin-project/go-fil-markets/pull/507))
+  - fix: disallow concurrent retrieval deals for same peer/cid (#493) ([filecoin-project/go-fil-markets#493](https://github.com/filecoin-project/go-fil-markets/pull/493))
+  - make deal state channel id nilable (#490) ([filecoin-project/go-fil-markets#490](https://github.com/filecoin-project/go-fil-markets/pull/490))
+  - fix: add funds to payment channel before allocating lane (#495) ([filecoin-project/go-fil-markets#495](https://github.com/filecoin-project/go-fil-markets/pull/495))
+- github.com/filecoin-project/go-data-transfer (v1.2.7 -> v1.2.9):
+  - fix: log line in pull data channel monitor (#165) ([filecoin-project/go-data-transfer#165](https://github.com/filecoin-project/go-data-transfer/pull/165))
+  - feat: better reconnect behaviour (#162) ([filecoin-project/go-data-transfer#162](https://github.com/filecoin-project/go-data-transfer/pull/162))
+  - Improve push channel to detect when not all data has been received (#157) ([filecoin-project/go-data-transfer#157](https://github.com/filecoin-project/go-data-transfer/pull/157))
+  - fix: flaky TestSimulatedRetrievalFlow (#159) ([filecoin-project/go-data-transfer#159](https://github.com/filecoin-project/go-data-transfer/pull/159))
+  - feat: better logging (#155) ([filecoin-project/go-data-transfer#155](https://github.com/filecoin-project/go-data-transfer/pull/155))
+  - fix: add missing event names (#148) ([filecoin-project/go-data-transfer#148](https://github.com/filecoin-project/go-data-transfer/pull/148))
+  - enable codecov. (#146) ([filecoin-project/go-data-transfer#146](https://github.com/filecoin-project/go-data-transfer/pull/146))
+  - Better error message on complete (#145) ([filecoin-project/go-data-transfer#145](https://github.com/filecoin-project/go-data-transfer/pull/145))
+  - test: check total blocks sent when theres a restart (#140) ([filecoin-project/go-data-transfer#140](https://github.com/filecoin-project/go-data-transfer/pull/140))
+  - feat(deps): update to go-graphsync v0.6.0 (#139) ([filecoin-project/go-data-transfer#139](https://github.com/filecoin-project/go-data-transfer/pull/139))
+- github.com/ipfs/go-graphsync (v0.5.2 -> v0.6.0):
+  - docs(CHANGELOG): revise for 0.6.0
+  - docs(CHANGELOG): update for 0.6.0 release
+  - move block allocation into message queue (#140) ([ipfs/go-graphsync#140](https://github.com/ipfs/go-graphsync/pull/140))
+  - Response Assembler Refactor (#138) ([ipfs/go-graphsync#138](https://github.com/ipfs/go-graphsync/pull/138))
+  - Add error listener on receiver (#136) ([ipfs/go-graphsync#136](https://github.com/ipfs/go-graphsync/pull/136))
+  - Run testplan on in CI (#137) ([ipfs/go-graphsync#137](https://github.com/ipfs/go-graphsync/pull/137))
+  - fix(responsemanager): fix network error propogation (#133) ([ipfs/go-graphsync#133](https://github.com/ipfs/go-graphsync/pull/133))
+  - testground test for graphsync (#132) ([ipfs/go-graphsync#132](https://github.com/ipfs/go-graphsync/pull/132))
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dirkmc | 17 | +3973/-1000 | 88 |
+| Alex Cruikshank | 4 | +3135/-1785 | 46 |
+| Hannah Howard | 4 | +671/-386 | 28 |
+| Whyrusleeping | 1 | +33/-22 | 1 |
+| hannahhoward | 2 | +38/-15 | 4 |
+| Dirk McCormick | 1 | +19/-0 | 1 |
+| raulk | 1 | +2/-2 | 1 |
+
 # go-fil-markets v1.1.9
 
 - github.com/filecoin-project/go-fil-markets:

@@ -6,16 +6,15 @@ require (
 	github.com/filecoin-project/go-address v0.0.5
 	github.com/filecoin-project/go-cbor-util v0.0.0-20191219014500-08c40a1e63a2
 	github.com/filecoin-project/go-commp-utils v0.0.0-20201119054358-b88f7a96a434
-	github.com/filecoin-project/go-data-transfer v1.2.7
+	github.com/filecoin-project/go-data-transfer v1.5.0
 	github.com/filecoin-project/go-ds-versioning v0.1.0
 	github.com/filecoin-project/go-multistore v0.0.3
 	github.com/filecoin-project/go-padreader v0.0.0-20200903213702-ed5fae088b20
 	github.com/filecoin-project/go-state-types v0.1.0
 	github.com/filecoin-project/go-statemachine v0.0.0-20200925024713-05bd7c71fbfe
-	github.com/filecoin-project/go-statestore v0.1.1-0.20210311122610-6c7a5aedbdea
-	github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b
-	github.com/filecoin-project/specs-actors v1.0.0
-	github.com/filecoin-project/specs-actors/v2 v2.3.4
+	github.com/filecoin-project/go-statestore v0.1.0
+	github.com/filecoin-project/specs-actors v0.9.13
+	github.com/filecoin-project/specs-actors/v2 v2.3.3
 	github.com/hannahhoward/cbor-gen-for v0.0.0-20200817222906-ea96cece81f1
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/hashicorp/golang-lru v0.5.4
@@ -23,7 +22,7 @@ require (
 	github.com/ipfs/go-blockservice v0.1.4-0.20200624145336-a978cec6e834
 	github.com/ipfs/go-cid v0.0.7
 	github.com/ipfs/go-datastore v0.4.5
-	github.com/ipfs/go-graphsync v0.5.2
+	github.com/ipfs/go-graphsync v0.6.1
 	github.com/ipfs/go-ipfs-blockstore v1.0.3
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
@@ -53,6 +52,6 @@ replace github.com/filecoin-project/go-fil-markets => ./
 
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
 
-replace github.com/filecoin-project/specs-actors/v2 => github.com/EpiK-Protocol/go-epik-actors/v2 v2.4.0-alpha.0.20210512064730-dc858e4a8bd1
+replace github.com/filecoin-project/specs-actors/v2 => github.com/EpiK-Protocol/go-epik-actors/v2 v2.4.0-alpha.0.20210524034003-5ac334d1d3a7
 
-replace github.com/filecoin-project/go-data-transfer => github.com/EpiK-Protocol/go-data-transfer v1.1.1-0.20210218064751-b53c28fecbf2
+replace github.com/filecoin-project/go-data-transfer => github.com/EpiK-Protocol/go-data-transfer v1.1.1-0.20210527075446-3ce029f57387

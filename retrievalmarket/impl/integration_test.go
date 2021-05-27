@@ -103,12 +103,12 @@ func requireSetupTestClientAndProvider(ctx context.Context, t *testing.T, payChA
 
 	gs1 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host1), testData.Loader1, testData.Storer1)
 	dtTransport1 := dtgstransport.NewTransport(testData.Host1.ID(), gs1)
-	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTTmpDir1, testData.DTNet1, dtTransport1, testData.DTStoredCounter1)
+	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTTmpDir1, testData.DTNet1, dtTransport1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
 	require.NoError(t, err)
 	clientDs := namespace.Wrap(testData.Ds1, datastore.NewKey("/retrievals/client"))
-	client, err := retrievalimpl.NewClient(nw1, testData.MultiStore1, dt1, rcNode1, &tut.TestPeerResolver{}, clientDs, testData.RetrievalStoredCounter1)
+	client, err := retrievalimpl.NewClient(nw1, testData.MultiStore1, dt1, rcNode1, &tut.TestPeerResolver{}, clientDs)
 	require.NoError(t, err)
 	tut.StartAndWaitForReady(ctx, t, client)
 	nw2 := rmnet.NewFromLibp2pHost(testData.Host2, rmnet.RetryParameters(0, 0, 0, 0))
@@ -143,7 +143,7 @@ func requireSetupTestClientAndProvider(ctx context.Context, t *testing.T, payChA
 
 	gs2 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host2), testData.Loader2, testData.Storer2)
 	dtTransport2 := dtgstransport.NewTransport(testData.Host2.ID(), gs2)
-	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTTmpDir2, testData.DTNet2, dtTransport2, testData.DTStoredCounter2)
+	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTTmpDir2, testData.DTNet2, dtTransport2)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestClientCanMakeDealWithProvider(t *testing.T) {
 			filename:    "lorem_under_1_block.txt",
 			filesize:    410,
 			unsealPrice: abi.NewTokenAmount(100),
-			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(100), abi.NewTokenAmount(410000)},
+			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(100), abi.NewTokenAmount(410100)},
 			selector:    shared.AllSelector(),
 			paramsV1:    true,
 		},
@@ -259,7 +259,7 @@ func TestClientCanMakeDealWithProvider(t *testing.T) {
 		{name: "multi-block file retrieval succeeds",
 			filename:    "lorem.txt",
 			filesize:    19000,
-			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(10136000), abi.NewTokenAmount(9784000)},
+			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(10000000), abi.NewTokenAmount(19920000)},
 		},
 		{name: "multi-block file retrieval with zero price per byte succeeds",
 			filename:         "lorem.txt",
@@ -269,7 +269,7 @@ func TestClientCanMakeDealWithProvider(t *testing.T) {
 		{name: "multi-block file retrieval succeeds with V1 params and AllSelector",
 			filename:    "lorem.txt",
 			filesize:    19000,
-			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(10136000), abi.NewTokenAmount(9784000)},
+			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(10000000), abi.NewTokenAmount(19920000)},
 			paramsV1:    true,
 			selector:    shared.AllSelector()},
 		{name: "partial file retrieval succeeds with V1 params and selector recursion depth 1",
@@ -290,7 +290,7 @@ func TestClientCanMakeDealWithProvider(t *testing.T) {
 		{name: "succeeds for regular blockstore",
 			filename:    "lorem.txt",
 			filesize:    19000,
-			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(10136000), abi.NewTokenAmount(9784000)},
+			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(10000000), abi.NewTokenAmount(19920000)},
 			skipStores:  true,
 		},
 		{
@@ -300,18 +300,27 @@ func TestClientCanMakeDealWithProvider(t *testing.T) {
 			voucherAmts: []abi.TokenAmount{},
 			failsUnseal: true,
 		},
-		{name: "multi-block file retrieval succeeds, final block lands on payment interval",
+		{name: "multi-block file retrieval succeeds, final block exceeds payment interval",
 			filename:                "lorem.txt",
 			filesize:                19000,
-			voucherAmts:             []abi.TokenAmount{abi.NewTokenAmount(9112000), abi.NewTokenAmount(10808000)},
+			voucherAmts:             []abi.TokenAmount{abi.NewTokenAmount(9000000), abi.NewTokenAmount(19250000), abi.NewTokenAmount(19920000)},
 			paymentInterval:         9000,
 			paymentIntervalIncrease: 1250,
+		},
+		{name: "multi-block file retrieval succeeds, final block lands on payment interval",
+			filename:    "lorem.txt",
+			filesize:    19000,
+			voucherAmts: []abi.TokenAmount{abi.NewTokenAmount(9000000), abi.NewTokenAmount(19920000)},
+			// Total bytes: 19,920
+			// intervals: 9,000 | 9,000 + (9,000 + 1920)
+			paymentInterval:         9000,
+			paymentIntervalIncrease: 1920,
 		},
 		{name: "multi-block file retrieval succeeds, with provider only accepting legacy deals",
 			filename:        "lorem.txt",
 			filesize:        19000,
 			disableNewDeals: true,
-			voucherAmts:     []abi.TokenAmount{abi.NewTokenAmount(10136000), abi.NewTokenAmount(9784000)},
+			voucherAmts:     []abi.TokenAmount{abi.NewTokenAmount(10000000), abi.NewTokenAmount(19920000)},
 		},
 	}
 
@@ -497,8 +506,7 @@ CurrentInterval: %d
 				clientStoreID = &id
 			}
 			// *** Retrieve the piece
-			did, err := client.Retrieve(bgCtx, payloadCID, rmParams, expectedTotal, retrievalPeer, clientPaymentChannel, retrievalPeer.Address, clientStoreID)
-			assert.Equal(t, did, retrievalmarket.DealID(0))
+			_, err = client.Retrieve(bgCtx, payloadCID, rmParams, expectedTotal, retrievalPeer, clientPaymentChannel, retrievalPeer.Address, clientStoreID)
 			require.NoError(t, err)
 
 			// verify that client subscribers will be notified of state changes
@@ -509,9 +517,7 @@ CurrentInterval: %d
 				t.FailNow()
 			case clientDealState = <-clientDealStateChan:
 			}
-			if testCase.failsUnseal {
-				assert.Equal(t, retrievalmarket.DealStatusErrored, clientDealState.Status)
-			} else if testCase.cancelled {
+			if testCase.failsUnseal || testCase.cancelled {
 				assert.Equal(t, retrievalmarket.DealStatusCancelled, clientDealState.Status)
 			} else {
 				if !testCase.zeroPricePerByte {
@@ -611,13 +617,13 @@ func setupClient(
 
 	gs1 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host1), testData.Loader1, testData.Storer1)
 	dtTransport1 := dtgstransport.NewTransport(testData.Host1.ID(), gs1)
-	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTTmpDir1, testData.DTNet1, dtTransport1, testData.DTStoredCounter1)
+	dt1, err := dtimpl.NewDataTransfer(testData.DTStore1, testData.DTTmpDir1, testData.DTNet1, dtTransport1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
 	require.NoError(t, err)
 	clientDs := namespace.Wrap(testData.Ds1, datastore.NewKey("/retrievals/client"))
 
-	client, err := retrievalimpl.NewClient(nw1, testData.MultiStore1, dt1, clientNode, &tut.TestPeerResolver{}, clientDs, testData.RetrievalStoredCounter1)
+	client, err := retrievalimpl.NewClient(nw1, testData.MultiStore1, dt1, clientNode, &tut.TestPeerResolver{}, clientDs)
 	return &createdChan, &newLaneAddr, &createdVoucher, clientNode, client, err
 }
 
@@ -648,7 +654,7 @@ func setupProvider(
 
 	gs2 := graphsyncimpl.New(ctx, network.NewFromLibp2pHost(testData.Host2), testData.Loader2, testData.Storer2)
 	dtTransport2 := dtgstransport.NewTransport(testData.Host2.ID(), gs2)
-	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTTmpDir2, testData.DTNet2, dtTransport2, testData.DTStoredCounter2)
+	dt2, err := dtimpl.NewDataTransfer(testData.DTStore2, testData.DTTmpDir2, testData.DTNet2, dtTransport2)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, err)

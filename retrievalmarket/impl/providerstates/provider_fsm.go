@@ -33,7 +33,7 @@ var ProviderEvents = fsm.Events{
 		From(rm.DealStatusFundsNeededUnseal).ToNoChange().
 		From(rm.DealStatusNew).To(rm.DealStatusUnsealing).
 		Action(func(deal *rm.ProviderDealState, channelID datatransfer.ChannelID) error {
-			deal.ChannelID = channelID
+			deal.ChannelID = &channelID
 			return nil
 		}),
 
@@ -58,6 +58,7 @@ var ProviderEvents = fsm.Events{
 	// request payment
 	fsm.Event(rm.ProviderEventPaymentRequested).
 		FromMany(rm.DealStatusOngoing, rm.DealStatusUnsealed).To(rm.DealStatusFundsNeeded).
+		From(rm.DealStatusFundsNeeded).ToJustRecord().
 		From(rm.DealStatusBlocksComplete).To(rm.DealStatusFundsNeededLastPayment).
 		From(rm.DealStatusNew).To(rm.DealStatusFundsNeededUnseal).
 		Action(func(deal *rm.ProviderDealState, totalSent uint64) error {
@@ -79,9 +80,14 @@ var ProviderEvents = fsm.Events{
 		From(rm.DealStatusFundsNeeded).To(rm.DealStatusOngoing).
 		From(rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusFinalizing).
 		From(rm.DealStatusFundsNeededUnseal).To(rm.DealStatusUnsealing).
+		FromMany(rm.DealStatusBlocksComplete, rm.DealStatusOngoing, rm.DealStatusFinalizing).ToJustRecord().
 		Action(func(deal *rm.ProviderDealState, fundsReceived abi.TokenAmount) error {
 			deal.FundsReceived = big.Add(deal.FundsReceived, fundsReceived)
-			deal.CurrentInterval += deal.PaymentIntervalIncrease
+
+			// only update interval if the payment is for bytes and not for unsealing.
+			if deal.Status != rm.DealStatusFundsNeededUnseal {
+				deal.CurrentInterval = deal.NextInterval()
+			}
 			return nil
 		}),
 

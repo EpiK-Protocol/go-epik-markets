@@ -391,6 +391,7 @@ func (c *Client) ProposeStorageDeal(ctx context.Context, params storagemarket.Pr
 		DataRef:            params.Data,
 		FastRetrieval:      params.FastRetrieval,
 		StoreID:            params.StoreID,
+		DealStages:         storagemarket.NewDealStages(),
 		CreationTime:       curTime(),
 	}
 

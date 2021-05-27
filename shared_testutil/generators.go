@@ -94,48 +94,11 @@ func MakeTestDealProposal() retrievalmarket.DealProposal {
 	}
 }
 
-// MakeTestDealResponse generates a valid, random DealResponse
-func MakeTestDealResponse() retrievalmarket.DealResponse {
-	return retrievalmarket.DealResponse{
-		Status:      retrievalmarket.DealStatusOngoing,
-		ID:          retrievalmarket.DealID(rand.Uint64()),
-		PaymentOwed: MakeTestTokenAmount(),
-		Message:     "deal response message",
-	}
-}
-
 // MakeTestChannelID makes a new empty data transfer channel ID
 func MakeTestChannelID() datatransfer.ChannelID {
 	testPeers := GeneratePeers(2)
 	transferID := datatransfer.TransferID(rand.Uint64())
 	return datatransfer.ChannelID{ID: transferID, Initiator: testPeers[0], Responder: testPeers[1]}
-}
-
-// MakeTestRetrievalProviderDeal returns a random valid retrieval provider deal
-func MakeTestRetrievalProviderDeal(status retrievalmarket.DealStatus) *retrievalmarket.ProviderDealState {
-	interval := rand.Uint64()
-	channelID := MakeTestChannelID()
-	return &retrievalmarket.ProviderDealState{
-		Status:          status,
-		ChannelID:       channelID,
-		Receiver:        channelID.Initiator,
-		TotalSent:       interval,
-		CurrentInterval: interval,
-		FundsReceived:   big.Zero(),
-		DealProposal: retrievalmarket.DealProposal{
-			ID:     retrievalmarket.DealID(rand.Uint64()),
-			Params: retrievalmarket.NewParamsV0(MakeTestTokenAmount(), interval, rand.Uint64()),
-		},
-	}
-}
-
-// MakeTestDealPayment generates a valid, random DealPayment
-func MakeTestDealPayment() retrievalmarket.DealPayment {
-	return retrievalmarket.DealPayment{
-		ID:             retrievalmarket.DealID(rand.Uint64()),
-		PaymentChannel: address.TestAddress,
-		PaymentVoucher: MakeTestSignedVoucher(),
-	}
 }
 
 // MakeTestUnsignedDealProposal generates a deal proposal with no signature
@@ -199,6 +162,7 @@ func MakeTestClientDeal(state storagemarket.StorageDealStatus, clientDealProposa
 		Miner:              p,
 		MinerWorker:        address.TestAddress2,
 		DataRef:            MakeTestDataRef(manualXfer),
+		DealStages:         storagemarket.NewDealStages(),
 	}, nil
 }
 
@@ -330,11 +294,11 @@ func RequireGenerateRetrievalPeers(t *testing.T, numPeers int) []retrievalmarket
 
 type FakeDTValidator struct{}
 
-func (v *FakeDTValidator) ValidatePush(sender peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.VoucherResult, error) {
+func (v *FakeDTValidator) ValidatePush(isRestart bool, sender peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.VoucherResult, error) {
 	return nil, nil
 }
 
-func (v *FakeDTValidator) ValidatePull(receiver peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.VoucherResult, error) {
+func (v *FakeDTValidator) ValidatePull(isRestart bool, receiver peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.VoucherResult, error) {
 	return nil, nil
 }
 

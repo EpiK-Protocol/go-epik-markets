@@ -24,7 +24,6 @@ import (
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-storedcounter"
 
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	retrievalimpl "github.com/filecoin-project/go-fil-markets/retrievalmarket/impl"
@@ -40,19 +39,11 @@ import (
 func TestClient_Construction(t *testing.T) {
 
 	ds := dss.MutexWrap(datastore.NewMapDatastore())
-	storedCounter := storedcounter.New(ds, datastore.NewKey("nextDealID"))
 	multiStore, err := multistore.NewMultiDstore(ds)
 	require.NoError(t, err)
 	dt := tut.NewTestDataTransfer()
 	net := tut.NewTestRetrievalMarketNetwork(tut.TestNetworkParams{})
-	_, err = retrievalimpl.NewClient(
-		net,
-		multiStore,
-		dt,
-		testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{}),
-		&tut.TestPeerResolver{},
-		ds,
-		storedCounter)
+	_, err = retrievalimpl.NewClient(net, multiStore, dt, testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{}), &tut.TestPeerResolver{}, ds)
 	require.NoError(t, err)
 
 	require.Len(t, dt.Subscribers, 1)
@@ -80,7 +71,6 @@ func TestClient_Query(t *testing.T) {
 	ctx := context.Background()
 
 	ds := dss.MutexWrap(datastore.NewMapDatastore())
-	storedCounter := storedcounter.New(ds, datastore.NewKey("nextDealID"))
 	multiStore, err := multistore.NewMultiDstore(ds)
 	require.NoError(t, err)
 	dt := tut.NewTestDataTransfer()
@@ -117,14 +107,7 @@ func TestClient_Query(t *testing.T) {
 		})
 		node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
 		node.ExpectKnownAddresses(rpeer, nil)
-		c, err := retrievalimpl.NewClient(
-			net,
-			multiStore,
-			dt,
-			node,
-			&tut.TestPeerResolver{},
-			ds,
-			storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, node, &tut.TestPeerResolver{}, ds)
 		require.NoError(t, err)
 
 		resp, err := c.Query(ctx, rpeer, pcid, retrievalmarket.QueryParams{})
@@ -140,14 +123,7 @@ func TestClient_Query(t *testing.T) {
 		})
 		node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
 		node.ExpectKnownAddresses(rpeer, nil)
-		c, err := retrievalimpl.NewClient(
-			net,
-			multiStore,
-			dt,
-			node,
-			&tut.TestPeerResolver{},
-			ds,
-			storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, node, &tut.TestPeerResolver{}, ds)
 		require.NoError(t, err)
 
 		_, err = c.Query(ctx, rpeer, pcid, retrievalmarket.QueryParams{})
@@ -170,14 +146,7 @@ func TestClient_Query(t *testing.T) {
 		})
 		node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
 		node.ExpectKnownAddresses(rpeer, nil)
-		c, err := retrievalimpl.NewClient(
-			net,
-			multiStore,
-			dt,
-			node,
-			&tut.TestPeerResolver{},
-			ds,
-			storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, node, &tut.TestPeerResolver{}, ds)
 		require.NoError(t, err)
 
 		statusCode, err := c.Query(ctx, rpeer, pcid, retrievalmarket.QueryParams{})
@@ -199,14 +168,7 @@ func TestClient_Query(t *testing.T) {
 		})
 		node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
 		node.ExpectKnownAddresses(rpeer, nil)
-		c, err := retrievalimpl.NewClient(
-			net,
-			multiStore,
-			dt,
-			node,
-			&tut.TestPeerResolver{},
-			ds,
-			storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, node, &tut.TestPeerResolver{}, ds)
 		require.NoError(t, err)
 
 		statusCode, err := c.Query(ctx, rpeer, pcid, retrievalmarket.QueryParams{})
@@ -218,7 +180,6 @@ func TestClient_Query(t *testing.T) {
 
 func TestClient_FindProviders(t *testing.T) {
 	ds := dss.MutexWrap(datastore.NewMapDatastore())
-	storedCounter := storedcounter.New(ds, datastore.NewKey("nextDealID"))
 	multiStore, err := multistore.NewMultiDstore(ds)
 	require.NoError(t, err)
 	dt := tut.NewTestDataTransfer()
@@ -238,7 +199,7 @@ func TestClient_FindProviders(t *testing.T) {
 		peers := tut.RequireGenerateRetrievalPeers(t, 3)
 		testResolver := tut.TestPeerResolver{Peers: peers}
 
-		c, err := retrievalimpl.NewClient(net, multiStore, dt, &testnodes.TestRetrievalClientNode{}, &testResolver, ds, storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, &testnodes.TestRetrievalClientNode{}, &testResolver, ds)
 		require.NoError(t, err)
 
 		testCid := tut.GenerateCids(1)[0]
@@ -247,7 +208,7 @@ func TestClient_FindProviders(t *testing.T) {
 
 	t.Run("when there is an error, returns empty provider list", func(t *testing.T) {
 		testResolver := tut.TestPeerResolver{Peers: []retrievalmarket.RetrievalPeer{}, ResolverError: errors.New("boom")}
-		c, err := retrievalimpl.NewClient(net, multiStore, dt, &testnodes.TestRetrievalClientNode{}, &testResolver, ds, storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, &testnodes.TestRetrievalClientNode{}, &testResolver, ds)
 		require.NoError(t, err)
 
 		badCid := tut.GenerateCids(1)[0]
@@ -256,7 +217,7 @@ func TestClient_FindProviders(t *testing.T) {
 
 	t.Run("when there are no providers", func(t *testing.T) {
 		testResolver := tut.TestPeerResolver{Peers: []retrievalmarket.RetrievalPeer{}}
-		c, err := retrievalimpl.NewClient(net, multiStore, dt, &testnodes.TestRetrievalClientNode{}, &testResolver, ds, storedCounter)
+		c, err := retrievalimpl.NewClient(net, multiStore, dt, &testnodes.TestRetrievalClientNode{}, &testResolver, ds)
 		require.NoError(t, err)
 
 		testCid := tut.GenerateCids(1)[0]
@@ -264,12 +225,142 @@ func TestClient_FindProviders(t *testing.T) {
 	})
 }
 
+// TestClient_DuplicateRetrieve verifies that it's not possible to make a
+// retrieval deal for the same payload CID with the same peer as an existing
+// active deal
+func TestClient_DuplicateRetrieve(t *testing.T) {
+	bgCtx := context.Background()
+	ctx, cancel := context.WithCancel(bgCtx)
+	defer cancel()
+	payChAddr := address.TestAddress
+
+	payloadCIDs := tut.GenerateCids(2)
+	rpeer1 := retrievalmarket.RetrievalPeer{
+		Address: address.TestAddress2,
+		ID:      peer.ID("p1"),
+	}
+	rpeer2 := retrievalmarket.RetrievalPeer{
+		Address: address.TestAddress2,
+		ID:      peer.ID("p2"),
+	}
+
+	testCases := []struct {
+		name        string
+		payloadCid1 cid.Cid
+		payloadCid2 cid.Cid
+		rpeer1      retrievalmarket.RetrievalPeer
+		rpeer2      retrievalmarket.RetrievalPeer
+		expectError bool
+		cancelled   bool
+	}{{
+		name:        "different payload CID",
+		payloadCid1: payloadCIDs[0],
+		payloadCid2: payloadCIDs[1],
+		rpeer1:      rpeer1,
+		rpeer2:      rpeer1,
+	}, {
+		name:        "different peer",
+		payloadCid1: payloadCIDs[0],
+		payloadCid2: payloadCIDs[0],
+		rpeer1:      rpeer1,
+		rpeer2:      rpeer2,
+	}, {
+		name:        "same peer and payload CID",
+		payloadCid1: payloadCIDs[0],
+		payloadCid2: payloadCIDs[0],
+		rpeer1:      rpeer1,
+		rpeer2:      rpeer1,
+		expectError: true,
+	}, {
+		name:        "same peer and payload CID as cancelled deal",
+		payloadCid1: payloadCIDs[0],
+		payloadCid2: payloadCIDs[0],
+		rpeer1:      rpeer1,
+		rpeer2:      rpeer1,
+		cancelled:   true,
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up a retrieval client node with mocks
+			ds := dss.MutexWrap(datastore.NewMapDatastore())
+			multiStore, err := multistore.NewMultiDstore(ds)
+			require.NoError(t, err)
+			dt := tut.NewTestDataTransfer()
+			net := tut.NewTestRetrievalMarketNetwork(tut.TestNetworkParams{})
+			node := testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{})
+			node.ExpectKnownAddresses(tc.rpeer1, nil)
+			node.ExpectKnownAddresses(tc.rpeer2, nil)
+
+			// Create the client
+			client, err := retrievalimpl.NewClient(net, multiStore, dt, node, &tut.TestPeerResolver{}, ds)
+			require.NoError(t, err)
+
+			// Start the client and wait till it's ready
+			err = client.Start(ctx)
+			require.NoError(t, err)
+
+			ready := make(chan struct{})
+			go func() {
+				client.OnReady(func(err error) {
+					close(ready)
+				})
+			}()
+			select {
+			case <-ready:
+			case <-time.After(100 * time.Millisecond):
+			}
+
+			// Retrieve first payload CID from first peer
+			params := retrievalmarket.Params{
+				Selector:                nil,
+				PieceCID:                &tut.GenerateCids(1)[0],
+				PricePerByte:            abi.NewTokenAmount(1),
+				PaymentInterval:         1,
+				PaymentIntervalIncrease: 0,
+				UnsealPrice:             abi.NewTokenAmount(0),
+			}
+
+			dealID1, err := client.Retrieve(ctx, tc.payloadCid1, params, abi.NewTokenAmount(10), tc.rpeer1, payChAddr, tc.rpeer1.Address, nil)
+			assert.NoError(t, err)
+
+			// If the deal should be cancelled
+			if tc.cancelled {
+				done := make(chan struct{})
+				go func() {
+					client.SubscribeToEvents(func(event retrievalmarket.ClientEvent, state retrievalmarket.ClientDealState) {
+						if state.Status == retrievalmarket.DealStatusCancelled {
+							close(done)
+						}
+					})
+				}()
+
+				// Cancel deal and wait for it to complete cancelling
+				err = client.CancelDeal(dealID1)
+				require.NoError(t, err)
+
+				select {
+				case <-done:
+				case <-time.After(500 * time.Millisecond):
+				}
+			}
+
+			// Retrieve second payload CID from second peer
+			_, err = client.Retrieve(ctx, tc.payloadCid2, params, abi.NewTokenAmount(10), tc.rpeer2, payChAddr, tc.rpeer2.Address, nil)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestMigrations(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	ds := dss.MutexWrap(datastore.NewMapDatastore())
-	storedCounter := storedcounter.New(ds, datastore.NewKey("nextDealID"))
 	multiStore, err := multistore.NewMultiDstore(ds)
 	require.NoError(t, err)
 	dt := tut.NewTestDataTransfer()
@@ -379,14 +470,7 @@ func TestMigrations(t *testing.T) {
 		err = retrievalDs.Put(datastore.NewKey(fmt.Sprint(deal.ID)), buf.Bytes())
 		require.NoError(t, err)
 	}
-	retrievalClient, err := retrievalimpl.NewClient(
-		net,
-		multiStore,
-		dt,
-		testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{}),
-		&tut.TestPeerResolver{},
-		retrievalDs,
-		storedCounter)
+	retrievalClient, err := retrievalimpl.NewClient(net, multiStore, dt, testnodes.NewTestRetrievalClientNode(testnodes.TestRetrievalClientNodeParams{}), &tut.TestPeerResolver{}, retrievalDs)
 	require.NoError(t, err)
 	shared_testutil.StartAndWaitForReady(ctx, t, retrievalClient)
 	deals, err := retrievalClient.ListDeals()
@@ -410,7 +494,7 @@ func TestMigrations(t *testing.T) {
 				},
 			},
 			StoreID:              storeIDs[i],
-			ChannelID:            channelIDs[i],
+			ChannelID:            &channelIDs[i],
 			LastPaymentRequested: lastPaymentRequesteds[i],
 			AllBlocksReceived:    allBlocksReceiveds[i],
 			TotalFunds:           totalFundss[i],

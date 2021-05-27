@@ -1,5 +1,7 @@
 package retrievalmarket
 
+import "fmt"
+
 // DealStatus is the status of a retrieval deal returned by a provider
 // in a DealResponse
 type DealStatus uint64
@@ -113,38 +115,52 @@ const (
 	// the deal price per byte is zero (if it's not zero the provider asks
 	// for final payment after sending the last blocks).
 	DealStatusClientWaitingForLastBlocks
+
+	// DealStatusPaymentChannelAddingInitialFunds means that a payment channel
+	// exists from an earlier deal between client and provider, but we need
+	// to add funds to the channel for this particular deal
+	DealStatusPaymentChannelAddingInitialFunds
 )
 
 // DealStatuses maps deal status to a human readable representation
 var DealStatuses = map[DealStatus]string{
-	DealStatusNew:                          "DealStatusNew",
-	DealStatusUnsealing:                    "DealStatusUnsealing",
-	DealStatusUnsealed:                     "DealStatusUnsealed",
-	DealStatusWaitForAcceptance:            "DealStatusWaitForAcceptance",
-	DealStatusPaymentChannelCreating:       "DealStatusPaymentChannelCreating",
-	DealStatusPaymentChannelAddingFunds:    "DealStatusPaymentChannelAddingFunds",
-	DealStatusAccepted:                     "DealStatusAccepted",
-	DealStatusFundsNeededUnseal:            "DealStatusFundsNeededUnseal",
-	DealStatusFailing:                      "DealStatusFailing",
-	DealStatusRejected:                     "DealStatusRejected",
-	DealStatusFundsNeeded:                  "DealStatusFundsNeeded",
-	DealStatusSendFunds:                    "DealStatusSendFunds",
-	DealStatusSendFundsLastPayment:         "DealStatusSendFundsLastPayment",
-	DealStatusOngoing:                      "DealStatusOngoing",
-	DealStatusFundsNeededLastPayment:       "DealStatusFundsNeededLastPayment",
-	DealStatusCompleted:                    "DealStatusCompleted",
-	DealStatusDealNotFound:                 "DealStatusDealNotFound",
-	DealStatusErrored:                      "DealStatusErrored",
-	DealStatusBlocksComplete:               "DealStatusBlocksComplete",
-	DealStatusFinalizing:                   "DealStatusFinalizing",
-	DealStatusCompleting:                   "DealStatusCompleting",
-	DealStatusCheckComplete:                "DealStatusCheckComplete",
-	DealStatusCheckFunds:                   "DealStatusCheckFunds",
-	DealStatusInsufficientFunds:            "DealStatusInsufficientFunds",
-	DealStatusPaymentChannelAllocatingLane: "DealStatusPaymentChannelAllocatingLane",
-	DealStatusCancelling:                   "DealStatusCancelling",
-	DealStatusCancelled:                    "DealStatusCancelled",
-	DealStatusRetryLegacy:                  "DealStatusRetryLegacy",
-	DealStatusWaitForAcceptanceLegacy:      "DealStatusWaitForAcceptanceLegacy",
-	DealStatusClientWaitingForLastBlocks:   "DealStatusWaitingForLastBlocks",
+	DealStatusNew:                              "DealStatusNew",
+	DealStatusUnsealing:                        "DealStatusUnsealing",
+	DealStatusUnsealed:                         "DealStatusUnsealed",
+	DealStatusWaitForAcceptance:                "DealStatusWaitForAcceptance",
+	DealStatusPaymentChannelCreating:           "DealStatusPaymentChannelCreating",
+	DealStatusPaymentChannelAddingFunds:        "DealStatusPaymentChannelAddingFunds",
+	DealStatusAccepted:                         "DealStatusAccepted",
+	DealStatusFundsNeededUnseal:                "DealStatusFundsNeededUnseal",
+	DealStatusFailing:                          "DealStatusFailing",
+	DealStatusRejected:                         "DealStatusRejected",
+	DealStatusFundsNeeded:                      "DealStatusFundsNeeded",
+	DealStatusSendFunds:                        "DealStatusSendFunds",
+	DealStatusSendFundsLastPayment:             "DealStatusSendFundsLastPayment",
+	DealStatusOngoing:                          "DealStatusOngoing",
+	DealStatusFundsNeededLastPayment:           "DealStatusFundsNeededLastPayment",
+	DealStatusCompleted:                        "DealStatusCompleted",
+	DealStatusDealNotFound:                     "DealStatusDealNotFound",
+	DealStatusErrored:                          "DealStatusErrored",
+	DealStatusBlocksComplete:                   "DealStatusBlocksComplete",
+	DealStatusFinalizing:                       "DealStatusFinalizing",
+	DealStatusCompleting:                       "DealStatusCompleting",
+	DealStatusCheckComplete:                    "DealStatusCheckComplete",
+	DealStatusCheckFunds:                       "DealStatusCheckFunds",
+	DealStatusInsufficientFunds:                "DealStatusInsufficientFunds",
+	DealStatusPaymentChannelAllocatingLane:     "DealStatusPaymentChannelAllocatingLane",
+	DealStatusCancelling:                       "DealStatusCancelling",
+	DealStatusCancelled:                        "DealStatusCancelled",
+	DealStatusRetryLegacy:                      "DealStatusRetryLegacy",
+	DealStatusWaitForAcceptanceLegacy:          "DealStatusWaitForAcceptanceLegacy",
+	DealStatusClientWaitingForLastBlocks:       "DealStatusWaitingForLastBlocks",
+	DealStatusPaymentChannelAddingInitialFunds: "DealStatusPaymentChannelAddingInitialFunds",
+}
+
+func (s DealStatus) String() string {
+	str, ok := DealStatuses[s]
+	if ok {
+		return str
+	}
+	return fmt.Sprintf("DealStatusUnknown - %d", s)
 }

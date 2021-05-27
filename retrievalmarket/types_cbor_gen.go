@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	piecestore "github.com/filecoin-project/go-fil-markets/piecestore"
 	multistore "github.com/filecoin-project/go-multistore"
 	flowch "github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
@@ -775,7 +776,7 @@ func (t *Params) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{167}); err != nil {
+	if _, err := w.Write([]byte{166}); err != nil {
 		return err
 	}
 
@@ -794,22 +795,6 @@ func (t *Params) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := t.Selector.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.Size (uint64) (uint64)
-	if len("Size") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Size\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Size"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Size")); err != nil {
-		return err
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Size)); err != nil {
 		return err
 	}
 
@@ -944,21 +929,6 @@ func (t *Params) UnmarshalCBOR(r io.Reader) error {
 				if err := t.Selector.UnmarshalCBOR(br); err != nil {
 					return xerrors.Errorf("failed to read deferred field: %w", err)
 				}
-			}
-			// t.Size (uint64) (uint64)
-		case "Size":
-
-			{
-
-				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-				if err != nil {
-					return err
-				}
-				if maj != cbg.MajUnsignedInt {
-					return fmt.Errorf("wrong type for uint64 field")
-				}
-				t.Size = uint64(extra)
-
 			}
 			// t.PieceCID (cid.Cid) (struct)
 		case "PieceCID":
@@ -1296,7 +1266,7 @@ func (t *ClientDealState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{182}); err != nil {
+	if _, err := w.Write([]byte{181}); err != nil {
 		return err
 	}
 
@@ -1385,22 +1355,6 @@ func (t *ClientDealState) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := cbg.WriteBool(w, t.AllBlocksReceived); err != nil {
-		return err
-	}
-
-	// t.TotalSize (uint64) (uint64)
-	if len("TotalSize") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"TotalSize\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("TotalSize"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("TotalSize")); err != nil {
-		return err
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.TotalSize)); err != nil {
 		return err
 	}
 
@@ -1755,8 +1709,18 @@ func (t *ClientDealState) UnmarshalCBOR(r io.Reader) error {
 
 			{
 
-				if err := t.ChannelID.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.ChannelID: %w", err)
+				b, err := br.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := br.UnreadByte(); err != nil {
+						return err
+					}
+					t.ChannelID = new(datatransfer.ChannelID)
+					if err := t.ChannelID.UnmarshalCBOR(br); err != nil {
+						return xerrors.Errorf("unmarshaling t.ChannelID pointer: %w", err)
+					}
 				}
 
 			}
@@ -1795,21 +1759,6 @@ func (t *ClientDealState) UnmarshalCBOR(r io.Reader) error {
 				t.AllBlocksReceived = true
 			default:
 				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
-			}
-			// t.TotalSize (uint64) (uint64)
-		case "TotalSize":
-
-			{
-
-				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-				if err != nil {
-					return err
-				}
-				if maj != cbg.MajUnsignedInt {
-					return fmt.Errorf("wrong type for uint64 field")
-				}
-				t.TotalSize = uint64(extra)
-
 			}
 			// t.TotalFunds (big.Int) (struct)
 		case "TotalFunds":
@@ -2299,8 +2248,18 @@ func (t *ProviderDealState) UnmarshalCBOR(r io.Reader) error {
 
 			{
 
-				if err := t.ChannelID.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.ChannelID: %w", err)
+				b, err := br.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := br.UnreadByte(); err != nil {
+						return err
+					}
+					t.ChannelID = new(datatransfer.ChannelID)
+					if err := t.ChannelID.UnmarshalCBOR(br); err != nil {
+						return xerrors.Errorf("unmarshaling t.ChannelID pointer: %w", err)
+					}
 				}
 
 			}

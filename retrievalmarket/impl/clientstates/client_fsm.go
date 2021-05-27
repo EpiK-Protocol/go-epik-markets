@@ -25,6 +25,7 @@ var paymentChannelCreationStates = []fsm.StateKey{
 	rm.DealStatusWaitForAcceptanceLegacy,
 	rm.DealStatusAccepted,
 	rm.DealStatusPaymentChannelCreating,
+	rm.DealStatusPaymentChannelAddingInitialFunds,
 	rm.DealStatusPaymentChannelAllocatingLane,
 }
 
@@ -43,8 +44,9 @@ var ClientEvents = fsm.Events{
 	fsm.Event(rm.ClientEventDealProposed).
 		From(rm.DealStatusNew).To(rm.DealStatusWaitForAcceptance).
 		From(rm.DealStatusRetryLegacy).To(rm.DealStatusWaitForAcceptanceLegacy).
+		From(rm.DealStatusCancelling).ToJustRecord().
 		Action(func(deal *rm.ClientDealState, channelID datatransfer.ChannelID) error {
-			deal.ChannelID = channelID
+			deal.ChannelID = &channelID
 			deal.Message = ""
 			return nil
 		}),
@@ -92,8 +94,13 @@ var ClientEvents = fsm.Events{
 			return nil
 		}),
 
+	// Client is adding funds to payment channel
 	fsm.Event(rm.ClientEventPaymentChannelAddingFunds).
-		FromMany(rm.DealStatusAccepted).To(rm.DealStatusPaymentChannelAllocatingLane).
+		// If the deal has just been accepted, we are adding the initial funds
+		// to the payment channel
+		FromMany(rm.DealStatusAccepted).To(rm.DealStatusPaymentChannelAddingInitialFunds).
+		// If the deal was already ongoing, and ran out of funds, we are
+		// topping up funds in the payment channel
 		FromMany(rm.DealStatusCheckFunds).To(rm.DealStatusPaymentChannelAddingFunds).
 		Action(func(deal *rm.ClientDealState, msgCID cid.Cid, payCh address.Address) error {
 			deal.WaitMsgCID = &msgCID
@@ -105,8 +112,18 @@ var ClientEvents = fsm.Events{
 			return nil
 		}),
 
+	// The payment channel add funds message has landed on chain
 	fsm.Event(rm.ClientEventPaymentChannelReady).
+		// If the payment channel between client and provider was being created
+		// for the first time, or if the payment channel had already been
+		// created for an earlier deal but the initial funding for this deal
+		// was being added, then we still need to allocate a payment channel
+		// lane
 		From(rm.DealStatusPaymentChannelCreating).To(rm.DealStatusPaymentChannelAllocatingLane).
+		From(rm.DealStatusPaymentChannelAddingInitialFunds).To(rm.DealStatusPaymentChannelAllocatingLane).
+		// If the payment channel ran out of funds and needed to be topped up,
+		// then the payment channel lane already exists so just move straight
+		// to the ongoing state
 		From(rm.DealStatusPaymentChannelAddingFunds).To(rm.DealStatusOngoing).
 		From(rm.DealStatusCheckFunds).To(rm.DealStatusOngoing).
 		Action(func(deal *rm.ClientDealState, payCh address.Address) error {
@@ -150,6 +167,8 @@ var ClientEvents = fsm.Events{
 			rm.DealStatusOngoing,
 			rm.DealStatusFundsNeededLastPayment,
 			rm.DealStatusFundsNeeded).To(rm.DealStatusFundsNeededLastPayment).
+		From(rm.DealStatusSendFunds).To(rm.DealStatusOngoing).
+		From(rm.DealStatusCheckComplete).ToNoChange().
 		From(rm.DealStatusBlocksComplete).To(rm.DealStatusSendFundsLastPayment).
 		FromMany(
 			paymentChannelCreationStates...).ToJustRecord().
@@ -162,7 +181,10 @@ var ClientEvents = fsm.Events{
 		FromMany(
 			rm.DealStatusOngoing,
 			rm.DealStatusBlocksComplete,
-			rm.DealStatusFundsNeeded).To(rm.DealStatusFundsNeeded).
+			rm.DealStatusFundsNeeded,
+			rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusFundsNeeded).
+		From(rm.DealStatusSendFunds).To(rm.DealStatusOngoing).
+		From(rm.DealStatusCheckComplete).ToNoChange().
 		FromMany(
 			paymentChannelCreationStates...).ToJustRecord().
 		Action(func(deal *rm.ClientDealState, paymentOwed abi.TokenAmount) error {
@@ -184,9 +206,11 @@ var ClientEvents = fsm.Events{
 			rm.DealStatusBlocksComplete,
 		).To(rm.DealStatusBlocksComplete).
 		FromMany(paymentChannelCreationStates...).ToJustRecord().
-		FromMany(rm.DealStatusSendFunds, rm.DealStatusFundsNeeded).ToJustRecord().
+		FromMany(rm.DealStatusSendFunds, rm.DealStatusSendFundsLastPayment).To(rm.DealStatusOngoing).
+		From(rm.DealStatusFundsNeeded).ToNoChange().
 		From(rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusSendFundsLastPayment).
 		From(rm.DealStatusClientWaitingForLastBlocks).To(rm.DealStatusCompleted).
+		From(rm.DealStatusCheckComplete).To(rm.DealStatusCompleted).
 		Action(func(deal *rm.ClientDealState) error {
 			deal.AllBlocksReceived = true
 			return nil
@@ -197,10 +221,12 @@ var ClientEvents = fsm.Events{
 			rm.DealStatusFundsNeededLastPayment,
 			rm.DealStatusCheckComplete,
 			rm.DealStatusClientWaitingForLastBlocks).ToNoChange().
+		FromMany(rm.DealStatusSendFunds, rm.DealStatusSendFundsLastPayment).To(rm.DealStatusOngoing).
 		FromMany(paymentChannelCreationStates...).ToJustRecord().
 		Action(recordReceived),
 
 	fsm.Event(rm.ClientEventSendFunds).
+		FromMany(rm.DealStatusSendFunds, rm.DealStatusSendFundsLastPayment).To(rm.DealStatusOngoing).
 		From(rm.DealStatusFundsNeeded).To(rm.DealStatusSendFunds).
 		From(rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusSendFundsLastPayment),
 
@@ -235,34 +261,68 @@ var ClientEvents = fsm.Events{
 			deal.Message = xerrors.Errorf("writing deal payment: %w", err).Error()
 			return nil
 		}),
-	fsm.Event(rm.ClientEventPaymentSent).
+
+	// Payment was requested, but there was not actually any payment due, so
+	// no payment voucher was actually sent
+	fsm.Event(rm.ClientEventPaymentNotSent).
+		From(rm.DealStatusOngoing).ToJustRecord().
 		From(rm.DealStatusSendFunds).To(rm.DealStatusOngoing).
+		From(rm.DealStatusSendFundsLastPayment).To(rm.DealStatusFinalizing),
+
+	fsm.Event(rm.ClientEventPaymentSent).
+		From(rm.DealStatusOngoing).ToJustRecord().
+		From(rm.DealStatusBlocksComplete).To(rm.DealStatusCheckComplete).
+		From(rm.DealStatusCheckComplete).ToNoChange().
+		FromMany(
+			rm.DealStatusFundsNeeded,
+			rm.DealStatusFundsNeededLastPayment,
+			rm.DealStatusSendFunds).To(rm.DealStatusOngoing).
 		From(rm.DealStatusSendFundsLastPayment).To(rm.DealStatusFinalizing).
-		Action(func(deal *rm.ClientDealState) error {
-			// paymentRequested = 0
-			// fundsSpent = fundsSpent + paymentRequested
-			// if paymentRequested / pricePerByte >= currentInterval
-			// currentInterval = currentInterval + proposal.intervalIncrease
-			// bytesPaidFor = bytesPaidFor + (paymentRequested / pricePerByte)
-			deal.FundsSpent = big.Add(deal.FundsSpent, deal.PaymentRequested)
+		Action(func(deal *rm.ClientDealState, voucherAmt abi.TokenAmount) error {
+			// Reduce the payment requested by the amount of funds sent.
+			// Note that it may not be reduced to zero, if a new payment
+			// request came in while this one was being processed.
+			sentAmt := big.Sub(voucherAmt, deal.FundsSpent)
+			deal.PaymentRequested = big.Sub(deal.PaymentRequested, sentAmt)
 
-			paymentForUnsealing := big.Min(deal.PaymentRequested, big.Sub(deal.UnsealPrice, deal.UnsealFundsPaid))
+			// Update the total funds sent to the provider
+			deal.FundsSpent = voucherAmt
 
-			bytesPaidFor := uint64(0)
-			if deal.PricePerByte.GreaterThan(big.Zero()) {
-				bytesPaidFor = big.Div(big.Sub(deal.PaymentRequested, paymentForUnsealing), deal.PricePerByte).Uint64()
+			// If the unseal price hasn't yet been met, set the unseal funds
+			// paid to the amount sent to the provider
+			if deal.UnsealPrice.GreaterThanEqual(deal.FundsSpent) {
+				deal.UnsealFundsPaid = deal.FundsSpent
+				return nil
 			}
-			if bytesPaidFor >= deal.CurrentInterval {
-				deal.CurrentInterval += deal.DealProposal.PaymentIntervalIncrease
+			// The unseal funds have been fully paid
+			deal.UnsealFundsPaid = deal.UnsealPrice
+
+			// If the price per byte is zero, no further accounting needed
+			if deal.PricePerByte.IsZero() {
+				return nil
 			}
-			deal.BytesPaidFor += bytesPaidFor
-			deal.UnsealFundsPaid = big.Add(deal.UnsealFundsPaid, paymentForUnsealing)
-			deal.PaymentRequested = abi.NewTokenAmount(0)
+
+			// Calculate the amount spent on transferring data, and update the
+			// bytes paid for accordingly
+			paidSoFarForTransfer := big.Sub(deal.FundsSpent, deal.UnsealFundsPaid)
+			deal.BytesPaidFor = big.Div(paidSoFarForTransfer, deal.PricePerByte).Uint64()
+
+			// If the number of bytes paid for is above the current interval,
+			// increase the interval
+			if deal.BytesPaidFor >= deal.CurrentInterval {
+				deal.CurrentInterval = deal.NextInterval()
+			}
+
 			return nil
 		}),
 
 	// completing deals
 	fsm.Event(rm.ClientEventComplete).
+		FromMany(
+			rm.DealStatusSendFunds,
+			rm.DealStatusSendFundsLastPayment,
+			rm.DealStatusFundsNeeded,
+			rm.DealStatusFundsNeededLastPayment).To(rm.DealStatusCheckComplete).
 		From(rm.DealStatusOngoing).To(rm.DealStatusCheckComplete).
 		From(rm.DealStatusBlocksComplete).To(rm.DealStatusCheckComplete).
 		From(rm.DealStatusFinalizing).To(rm.DealStatusCompleted),
@@ -279,7 +339,8 @@ var ClientEvents = fsm.Events{
 	// should wait for the last blocks to arrive (only needed when price
 	// per byte is zero)
 	fsm.Event(rm.ClientEventWaitForLastBlocks).
-		From(rm.DealStatusCheckComplete).To(rm.DealStatusClientWaitingForLastBlocks),
+		From(rm.DealStatusCheckComplete).To(rm.DealStatusClientWaitingForLastBlocks).
+		From(rm.DealStatusCompleted).ToJustRecord(),
 
 	// after cancelling a deal is complete
 	fsm.Event(rm.ClientEventCancelComplete).
@@ -319,22 +380,31 @@ var ClientFinalityStates = []fsm.StateKey{
 	rm.DealStatusDealNotFound,
 }
 
+func IsFinalityState(st fsm.StateKey) bool {
+	for _, state := range ClientFinalityStates {
+		if st == state {
+			return true
+		}
+	}
+	return false
+}
+
 // ClientStateEntryFuncs are the handlers for different states in a retrieval client
 var ClientStateEntryFuncs = fsm.StateEntryFuncs{
-	rm.DealStatusNew:                          ProposeDeal,
-	rm.DealStatusRetryLegacy:                  ProposeDeal,
-	rm.DealStatusAccepted:                     SetupPaymentChannelStart,
-	rm.DealStatusPaymentChannelCreating:       WaitPaymentChannelReady,
-	rm.DealStatusPaymentChannelAllocatingLane: AllocateLane,
-	rm.DealStatusOngoing:                      Ongoing,
-	rm.DealStatusFundsNeeded:                  ProcessPaymentRequested,
-	rm.DealStatusFundsNeededLastPayment:       ProcessPaymentRequested,
-	rm.DealStatusSendFunds:                    SendFunds,
-	rm.DealStatusSendFundsLastPayment:         SendFunds,
-	rm.DealStatusCheckFunds:                   CheckFunds,
-	rm.DealStatusPaymentChannelAddingFunds:    WaitPaymentChannelReady,
-	rm.DealStatusFailing:                      CancelDeal,
-	rm.DealStatusCancelling:                   CancelDeal,
-	rm.DealStatusCheckComplete:                CheckComplete,
-	// rm.DealStatusFinalizing:                   Complete,
+	rm.DealStatusNew:                              ProposeDeal,
+	rm.DealStatusRetryLegacy:                      ProposeDeal,
+	rm.DealStatusAccepted:                         SetupPaymentChannelStart,
+	rm.DealStatusPaymentChannelCreating:           WaitPaymentChannelReady,
+	rm.DealStatusPaymentChannelAddingInitialFunds: WaitPaymentChannelReady,
+	rm.DealStatusPaymentChannelAllocatingLane:     AllocateLane,
+	rm.DealStatusOngoing:                          Ongoing,
+	rm.DealStatusFundsNeeded:                      ProcessPaymentRequested,
+	rm.DealStatusFundsNeededLastPayment:           ProcessPaymentRequested,
+	rm.DealStatusSendFunds:                        SendFunds,
+	rm.DealStatusSendFundsLastPayment:             SendFunds,
+	rm.DealStatusCheckFunds:                       CheckFunds,
+	rm.DealStatusPaymentChannelAddingFunds:        WaitPaymentChannelReady,
+	rm.DealStatusFailing:                          CancelDeal,
+	rm.DealStatusCancelling:                       CancelDeal,
+	rm.DealStatusCheckComplete:                    CheckComplete,
 }

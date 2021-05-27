@@ -3,6 +3,8 @@ package retrievalimpl
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/hannahhoward/go-pubsub"
@@ -15,13 +17,11 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	versionedfsm "github.com/filecoin-project/go-ds-versioning/pkg/fsm"
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-statemachine/fsm"
-	"github.com/filecoin-project/go-storedcounter"
 
 	"github.com/filecoin-project/go-fil-markets/discovery"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -36,18 +36,21 @@ var log = logging.Logger("retrieval")
 
 // Client is the production implementation of the RetrievalClient interface
 type Client struct {
-	network       rmnet.RetrievalMarketNetwork
-	dataTransfer  datatransfer.Manager
-	multiStore    *multistore.MultiStore
-	node          retrievalmarket.RetrievalClientNode
-	storedCounter *storedcounter.StoredCounter
+	network      rmnet.RetrievalMarketNetwork
+	dataTransfer datatransfer.Manager
+	multiStore   *multistore.MultiStore
+	node         retrievalmarket.RetrievalClientNode
+	dealIDGen    *shared.TimeCounter
 
 	subscribers          *pubsub.PubSub
 	readySub             *pubsub.PubSub
 	resolver             discovery.PeerResolver
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
-	checkEvents          *lru.ARCCache
+
+	// Guards concurrent access to Retrieve method
+	retrieveLk  sync.Mutex
+	checkEvents *lru.ARCCache
 }
 
 type internalEvent struct {
@@ -76,29 +79,22 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 var _ retrievalmarket.RetrievalClient = &Client{}
 
 // NewClient creates a new retrieval client
-func NewClient(
-	network rmnet.RetrievalMarketNetwork,
-	multiStore *multistore.MultiStore,
-	dataTransfer datatransfer.Manager,
-	node retrievalmarket.RetrievalClientNode,
-	resolver discovery.PeerResolver,
-	ds datastore.Batching,
-	storedCounter *storedcounter.StoredCounter,
-) (retrievalmarket.RetrievalClient, error) {
+func NewClient(network rmnet.RetrievalMarketNetwork, multiStore *multistore.MultiStore, dataTransfer datatransfer.Manager, node retrievalmarket.RetrievalClientNode, resolver discovery.PeerResolver, ds datastore.Batching) (retrievalmarket.RetrievalClient, error) {
 	checkEvents, err := lru.NewARC(10000)
 	if err != nil {
 		return nil, err
 	}
+
 	c := &Client{
-		network:       network,
-		multiStore:    multiStore,
-		dataTransfer:  dataTransfer,
-		node:          node,
-		resolver:      resolver,
-		storedCounter: storedCounter,
-		subscribers:   pubsub.New(dispatcher),
-		readySub:      pubsub.New(shared.ReadyDispatcher),
-		checkEvents:   checkEvents,
+		network:      network,
+		multiStore:   multiStore,
+		dataTransfer: dataTransfer,
+		node:         node,
+		resolver:     resolver,
+		dealIDGen:    shared.NewTimeCounter(),
+		subscribers:  pubsub.New(dispatcher),
+		readySub:     pubsub.New(shared.ReadyDispatcher),
+		checkEvents:  checkEvents,
 	}
 	retrievalMigrations, err := migrations.ClientMigrations.Build()
 	if err != nil {
@@ -112,7 +108,7 @@ func NewClient(
 		StateEntryFuncs: clientstates.ClientStateEntryFuncs,
 		FinalityStates:  clientstates.ClientFinalityStates,
 		Notifier:        c.notifySubscribers,
-	}, retrievalMigrations, versioning.VersionKey("1"))
+	}, retrievalMigrations, "2")
 	if err != nil {
 		return nil, err
 	}
@@ -325,14 +321,21 @@ From then on, the statemachine controls the deal flow in the client. Other compo
 Documentation of the client state machine can be found at https://godoc.org/github.com/filecoin-project/go-fil-markets/retrievalmarket/impl/clientstates
 */
 func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrievalmarket.Params, totalFunds abi.TokenAmount, p retrievalmarket.RetrievalPeer, clientWallet address.Address, minerWallet address.Address, storeID *multistore.StoreID) (retrievalmarket.DealID, error) {
-	err := c.addMultiaddrs(ctx, p)
+	c.retrieveLk.Lock()
+	defer c.retrieveLk.Unlock()
+
+	// Check if there's already an active retrieval deal with the same peer
+	// for the same payload CID
+	err := c.checkForActiveDeal(payloadCID, p.ID)
 	if err != nil {
 		return 0, err
 	}
-	next, err := c.storedCounter.Next()
+
+	err = c.addMultiaddrs(ctx, p)
 	if err != nil {
 		return 0, err
 	}
+
 	// make sure the store is loadable
 	if storeID != nil {
 		_, err = c.multiStore.Get(*storeID)
@@ -340,6 +343,8 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 			return 0, err
 		}
 	}
+
+	next := c.dealIDGen.Next()
 	dealID := retrievalmarket.DealID(next)
 	dealState := retrievalmarket.ClientDealState{
 		DealProposal: retrievalmarket.DealProposal{
@@ -378,6 +383,31 @@ func (c *Client) Retrieve(ctx context.Context, payloadCID cid.Cid, params retrie
 	})
 
 	return dealID, nil
+}
+
+// Check if there's already an active retrieval deal with the same peer
+// for the same payload CID
+func (c *Client) checkForActiveDeal(payloadCID cid.Cid, pid peer.ID) error {
+	var deals []retrievalmarket.ClientDealState
+	err := c.stateMachines.List(&deals)
+	if err != nil {
+		return err
+	}
+
+	for _, deal := range deals {
+		match := deal.Sender == pid && deal.PayloadCID == payloadCID
+		active := !clientstates.IsFinalityState(deal.Status)
+		if match && active {
+			msg := fmt.Sprintf("there is an active retrieval deal with peer %s ", pid)
+			msg += fmt.Sprintf("for payload CID %s ", payloadCID)
+			msg += fmt.Sprintf("(retrieval deal ID %d, state %s) - ",
+				deal.ID, retrievalmarket.DealStatuses[deal.Status])
+			msg += "existing deal must be cancelled before starting a new retrieval deal"
+			err := xerrors.Errorf(msg)
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) notifySubscribers(eventName fsm.EventName, state fsm.StateType) {
@@ -507,7 +537,18 @@ func (c *clientDealEnvironment) SendDataTransferVoucher(ctx context.Context, cha
 }
 
 func (c *clientDealEnvironment) CloseDataTransfer(ctx context.Context, channelID datatransfer.ChannelID) error {
-	return c.c.dataTransfer.CloseDataTransferChannel(ctx, channelID)
+	// When we close the data transfer, we also send a cancel message to the peer.
+	// Make sure we don't wait too long to send the message.
+	ctx, cancel := context.WithTimeout(ctx, shared.CloseDataTransferTimeout)
+	defer cancel()
+
+	err := c.c.dataTransfer.CloseDataTransferChannel(ctx, channelID)
+	if shared.IsCtxDone(err) {
+		log.Warnf("failed to send cancel data transfer channel %s to provider within timeout %s",
+			channelID, shared.CloseDataTransferTimeout)
+		return nil
+	}
+	return err
 }
 
 type clientStoreGetter struct {
