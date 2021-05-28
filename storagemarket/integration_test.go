@@ -19,7 +19,6 @@ import (
 	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
 	dtnet "github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/go-fil-markets/shared"
 	"github.com/filecoin-project/go-fil-markets/shared_testutil"
@@ -659,7 +658,7 @@ func TestBounceConnectionDataTransfer(t *testing.T) {
 	shared_testutil.StartAndWaitForReady(ctx, t, h.Client)
 
 	// set ask price where we'll accept any price
-	err := h.Provider.SetAsk(big.NewInt(0), big.NewInt(0), 50000)
+	err := h.Provider.SetAsk(50000)
 	require.NoError(t, err)
 
 	// Bounce connection after this many bytes have been queued for sending
@@ -703,7 +702,7 @@ func TestBounceConnectionDataTransfer(t *testing.T) {
 	//	}
 	//})
 
-	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false, false)
+	result := h.ProposeStorageDeal(t, &storagemarket.DataRef{TransferType: storagemarket.TTGraphsync, Root: h.PayloadCid}, false)
 	proposalCid := result.ProposalCid
 	t.Log("storage deal proposed")
 

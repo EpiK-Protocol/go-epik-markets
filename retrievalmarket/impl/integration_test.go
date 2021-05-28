@@ -494,7 +494,7 @@ CurrentInterval: %d
 
 			var rmParams retrievalmarket.Params
 			if testCase.paramsV1 {
-				rmParams, err = retrievalmarket.NewParamsV1(pricePerByte, paymentInterval, paymentIntervalIncrease, testCase.selector, nil, unsealPrice)
+				rmParams, err = retrievalmarket.NewParamsV1(pricePerByte, 5<<20, paymentInterval, paymentIntervalIncrease, testCase.selector, nil, unsealPrice)
 				require.NoError(t, err)
 			} else {
 				rmParams = retrievalmarket.NewParamsV0(pricePerByte, paymentInterval, paymentIntervalIncrease)

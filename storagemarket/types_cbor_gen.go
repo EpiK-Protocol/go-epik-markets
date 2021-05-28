@@ -1752,7 +1752,7 @@ func (t *StorageAsk) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{168}); err != nil {
+	if _, err := w.Write([]byte{166}); err != nil {
 		return err
 	}
 
@@ -2023,7 +2023,7 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{165}); err != nil {
+	if _, err := w.Write([]byte{166}); err != nil {
 		return err
 	}
 
@@ -2122,6 +2122,28 @@ func (t *DataRef) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.Expert (string) (string)
+	if len("Expert") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Expert\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Expert"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Expert")); err != nil {
+		return err
+	}
+
+	if len(t.Expert) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Expert was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Expert))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Expert)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2234,6 +2256,17 @@ func (t *DataRef) UnmarshalCBOR(r io.Reader) error {
 				}
 				t.RawBlockSize = uint64(extra)
 
+			}
+			// t.Expert (string) (string)
+		case "Expert":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.Expert = string(sval)
 			}
 
 		default:

@@ -776,7 +776,7 @@ func (t *Params) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{166}); err != nil {
+	if _, err := w.Write([]byte{167}); err != nil {
 		return err
 	}
 
@@ -795,6 +795,22 @@ func (t *Params) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := t.Selector.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Size (uint64) (uint64)
+	if len("Size") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Size\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Size"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Size")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Size)); err != nil {
 		return err
 	}
 
@@ -929,6 +945,21 @@ func (t *Params) UnmarshalCBOR(r io.Reader) error {
 				if err := t.Selector.UnmarshalCBOR(br); err != nil {
 					return xerrors.Errorf("failed to read deferred field: %w", err)
 				}
+			}
+			// t.Size (uint64) (uint64)
+		case "Size":
+
+			{
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
+				}
+				t.Size = uint64(extra)
+
 			}
 			// t.PieceCID (cid.Cid) (struct)
 		case "PieceCID":
@@ -1266,7 +1297,7 @@ func (t *ClientDealState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{181}); err != nil {
+	if _, err := w.Write([]byte{182}); err != nil {
 		return err
 	}
 
@@ -1355,6 +1386,22 @@ func (t *ClientDealState) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := cbg.WriteBool(w, t.AllBlocksReceived); err != nil {
+		return err
+	}
+
+	// t.TotalSize (uint64) (uint64)
+	if len("TotalSize") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"TotalSize\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("TotalSize"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("TotalSize")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.TotalSize)); err != nil {
 		return err
 	}
 
@@ -1759,6 +1806,21 @@ func (t *ClientDealState) UnmarshalCBOR(r io.Reader) error {
 				t.AllBlocksReceived = true
 			default:
 				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.TotalSize (uint64) (uint64)
+		case "TotalSize":
+
+			{
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
+				}
+				t.TotalSize = uint64(extra)
+
 			}
 			// t.TotalFunds (big.Int) (struct)
 		case "TotalFunds":
