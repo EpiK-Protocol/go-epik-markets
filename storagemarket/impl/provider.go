@@ -360,6 +360,10 @@ func (p *Provider) AddStorageCollateral(ctx context.Context, amount abi.TokenAmo
 		return err
 	}
 
+	if mcid == cid.Undef {
+		return nil
+	}
+
 	err = p.spn.WaitForMessage(ctx, mcid, func(code exitcode.ExitCode, bytes []byte, finalCid cid.Cid, err error) error {
 		if err != nil {
 			done <- xerrors.Errorf("AddFunds errored: %w", err)
