@@ -80,9 +80,9 @@ func NewStoredAsk(ds datastore.Batching, dsKey datastore.Key, spn storagemarket.
 
 	s.ds = versionedDs
 
-	if err := s.tryLoadAsk(); err != nil {
-		return nil, err
-	}
+	// if err := s.tryLoadAsk(); err != nil {
+	// 	return nil, err
+	// }
 
 	if s.ask == nil {
 		// TODO: we should be fine with this state, and just say it means 'not actively accepting deals'
