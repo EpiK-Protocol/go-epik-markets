@@ -156,9 +156,9 @@ func (c *Client) Start(ctx context.Context) error {
 		if err != nil {
 			log.Errorf("Migrating retrieval client state machines: %s", err.Error())
 		}
-		if err := c.restartDeals(ctx); err != nil {
-			log.Errorf("Failed to restart retrieve deals: %w", err)
-		}
+		// if err := c.restartDeals(ctx); err != nil {
+		// 	log.Errorf("Failed to restart retrieve deals: %w", err)
+		// }
 		err = c.readySub.Publish(err)
 		if err != nil {
 			log.Warnf("Publish retrieval client ready event: %s", err.Error())
@@ -230,15 +230,15 @@ func (c *Client) checkTimeOut() error {
 			c.checkEvents.Remove(rk)
 			log.Warnf("retrievel client remove check events: %s, status:%d", rk, deal.Status)
 		} else {
-			if time.Now().Sub(event.start) > 30*time.Minute {
-				// err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
-				err := c.CancelDeal(deal.ID)
-				if err != nil {
-					return err
-				}
-				c.checkEvents.Remove(rk)
-				log.Warnf("retrievel client timeout check events: %s, status:%d", rk, deal.Status)
-			}
+			// if time.Now().Sub(event.start) > 30*time.Minute {
+			// 	// err := c.stateMachines.Send(event.state.ID, retrievalmarket.ClientEventDataTransferError, xerrors.Errorf("deal state timeout error"))
+			// 	err := c.CancelDeal(deal.ID)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	c.checkEvents.Remove(rk)
+			// 	log.Warnf("retrievel client timeout check events: %s, status:%d", rk, deal.Status)
+			// }
 		}
 	}
 	return nil
