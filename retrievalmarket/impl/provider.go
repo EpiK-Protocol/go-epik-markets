@@ -409,7 +409,7 @@ func (p *Provider) HandleQueryStream(stream rmnet.RetrievalQueryStream) {
 	} else {
 		// log.Infof("Retrieval query: parallel number: %d", p.checkEvents.Len())
 		if p.checkEvents.Len() > retrievalmarket.MaxRetrieveParallelNum {
-			// log.Warnf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
+			log.Warnf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
 			answer.Status = retrievalmarket.QueryResponseUnavailable
 			answer.Message = "out of max parallel number"
 		}
