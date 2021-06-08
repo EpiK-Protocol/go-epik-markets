@@ -33,7 +33,7 @@ const QueryProtocolID = protocol.ID("/epk/retrieval/qry/1.0.0")
 const OldQueryProtocolID = protocol.ID("/epk/retrieval/qry/0.0.1")
 
 // MaxRetrieveParallelNum max Parallel number
-const MaxRetrieveParallelNum = 32
+const MaxRetrieveParallelNum = 16
 
 // Unsubscribe is a function that unsubscribes a subscriber for either the
 // client or the provider
