@@ -122,7 +122,7 @@ func NewProvider(minerAddress address.Address,
 		subscribers:  pubsub.New(providerDispatcher),
 		readySub:     pubsub.New(shared.ReadyDispatcher),
 		checkEvents:  checkEvents,
-		validateTime: time.Now().Add(2 * time.Minute),
+		validateTime: time.Now().Add(5 * time.Minute),
 	}
 
 	err := shared.MoveKey(ds, "retrieval-ask", "retrieval-ask/latest")
@@ -219,9 +219,9 @@ func (p *Provider) Start(ctx context.Context) error {
 		if err != nil {
 			log.Errorf("Migrating retrieval provider state machines: %s", err.Error())
 		}
-		// if err := p.restartDeals(ctx); err != nil {
-		// 	log.Errorf("Failed to restart retrieve provider deals: %w", err)
-		// }
+		if err := p.restartDeals(ctx); err != nil {
+			log.Errorf("Failed to restart retrieve provider deals: %w", err)
+		}
 		err = p.readySub.Publish(err)
 		if err != nil {
 			log.Warnf("Publish retrieval provider ready event: %s", err.Error())
@@ -278,14 +278,14 @@ func (p *Provider) checkTimeOut() error {
 			p.checkEvents.Remove(rk)
 			log.Warnf("retrievel provider timeout check remove check events: %s, status:%d", rk, deal.Status)
 		} else {
-			// if time.Now().Sub(event.start) > 35*time.Minute {
-			// 	err := p.stateMachines.Send(deal.Identifier(), retrievalmarket.ProviderEventClientCancelled)
-			// 	if err != nil {
-			// 		return err
-			// 	}
-			// 	p.checkEvents.Remove(rk)
-			// 	log.Warnf("retrievel provider timeout check events: %s, status:%d", rk, deal.Status)
-			// }
+			if time.Now().Sub(event.start) > 35*time.Minute {
+				err := p.stateMachines.Send(deal.Identifier(), retrievalmarket.ProviderEventClientCancelled)
+				if err != nil {
+					return err
+				}
+				p.checkEvents.Remove(rk)
+				log.Warnf("retrievel provider timeout check events: %s, status:%d", rk, deal.Status)
+			}
 		}
 	}
 	return nil
