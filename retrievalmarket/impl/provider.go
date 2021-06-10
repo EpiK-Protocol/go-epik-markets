@@ -122,7 +122,7 @@ func NewProvider(minerAddress address.Address,
 		subscribers:  pubsub.New(providerDispatcher),
 		readySub:     pubsub.New(shared.ReadyDispatcher),
 		checkEvents:  checkEvents,
-		validateTime: time.Now().Add(5 * time.Minute),
+		validateTime: time.Now().Add(2 * time.Minute),
 	}
 
 	err := shared.MoveKey(ds, "retrieval-ask", "retrieval-ask/latest")
@@ -409,7 +409,7 @@ func (p *Provider) HandleQueryStream(stream rmnet.RetrievalQueryStream) {
 	} else {
 		// log.Infof("Retrieval query: parallel number: %d", p.checkEvents.Len())
 		if p.checkEvents.Len() > retrievalmarket.MaxRetrieveParallelNum {
-			log.Warnf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
+			log.Debugf("Retrieval query: out of max parallel number: %d", p.checkEvents.Len())
 			answer.Status = retrievalmarket.QueryResponseUnavailable
 			answer.Message = "out of max parallel number"
 		}
