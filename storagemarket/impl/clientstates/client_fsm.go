@@ -261,7 +261,9 @@ var ClientEvents = fsm.Events{
 			deal.AddLog("")
 			return nil
 		}),
-	fsm.Event(storagemarket.ClientEventRestart).From(storagemarket.StorageDealTransferring).To(storagemarket.StorageDealClientTransferRestart).
+	fsm.Event(storagemarket.ClientEventRestart).
+		From(storagemarket.StorageDealFundsReserved).To(storagemarket.StorageDealFundsReserved).
+		From(storagemarket.StorageDealTransferring).To(storagemarket.StorageDealClientTransferRestart).
 		FromAny().ToNoChange(),
 }
 
